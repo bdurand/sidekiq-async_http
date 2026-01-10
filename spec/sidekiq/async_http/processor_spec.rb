@@ -1164,8 +1164,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       double("Async::HTTP::Response",
         status: 200,
         headers: {"Content-Type" => "application/json"},
-        protocol: "HTTP/1.1"
-      )
+        protocol: "HTTP/1.1")
     end
 
     before do

@@ -321,17 +321,18 @@ Hooks into Sidekiq's lifecycle for startup and shutdown:
 ### Happy Path
 
 ```
-1. Worker calls Sidekiq::AsyncHttp.request(...)
-2. Client builds Request object with UUID
-3. Request pushed to Thread::Queue
-4. Worker returns immediately (Sidekiq job completes)
-5. Processor's reactor loop picks up request
-6. New Fiber spawned for this request
-7. Fiber makes HTTP request via ConnectionPool → Async::HTTP::Client
-8. Response received, Fiber builds Response object
-9. Processor enqueues success_worker_class.perform_async(response.to_h, *original_args)
-10. Metrics updated
-11. Fiber completes
+1. Worker creates a Sidekiq::AsyncHttp::Request to set headers, base URL, etc.
+2. Worker calls async_request on the request to create an async request for a URL
+3. Worker calls perform on the async request specifying the success and error worker callback classes
+4. Request pushed to Thread::Queue
+5. Worker returns immediately (Sidekiq job completes)
+6. Processor's reactor loop picks up request
+7. New Fiber spawned for this request
+8. Fiber makes HTTP request via ConnectionPool → Async::HTTP::Client
+9. Response received, Fiber builds Response object
+10. Processor enqueues success_worker_class.perform_async(response.to_h, *original_args)
+11. Metrics updated
+12. Fiber completes
 ```
 
 ### Error Path
@@ -588,7 +589,7 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
         - Calling `header` or `param` will merge the value with the existing hash. Calling `headers` or `params` will replace the entire hash.
         - Calling `request` will return a Data object with all attributes set.
         - Write specs for each attribute method and the final `request` method.
-[x] 2.1 Implement AsyncRequest:
+[x] 2.1 Implement Request:
         - Define with: id, request, original_worker_class, success_worker_class,
           error_worker_class, original_args, enqueued_at, metadata
         - Override initialize for defaults:
@@ -879,9 +880,7 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
             - timeout: options[:timeout] || configuration.default_request_timeout
             - success_worker_class: options[:success_worker]
             - error_worker_class: options[:error_worker]
-            - original_worker_class: options[:original_worker]
-            - original_args: options[:original_args] || []
-            - metadata: options[:metadata] || {}
+            - sidekiq_job: options[:sidekiq_job] defaults to Sidekiq::Context.current
           - Call request.validate!
           - Call processor.enqueue(request)
           - Return request.id

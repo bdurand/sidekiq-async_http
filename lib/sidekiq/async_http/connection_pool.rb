@@ -232,7 +232,7 @@ module Sidekiq
           # This will yield to other fibers until a slot becomes available
           @capacity_condition.wait
           # After waking up, retry by returning (caller will check capacity again)
-          return
+          nil
         when :drop_oldest
           # Drop the oldest in-flight request to make room
           if @drop_oldest_callback

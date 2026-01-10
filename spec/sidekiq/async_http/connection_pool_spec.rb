@@ -365,7 +365,13 @@ RSpec.describe Sidekiq::AsyncHttp::ConnectionPool do
         pool.client_for("https://host1.example.com/")
         pool.client_for("https://host2.example.com/")
 
-        expect { pool.client_for("https://host3.example.com/") rescue nil }
+        expect {
+          begin
+            pool.client_for("https://host3.example.com/")
+          rescue
+            nil
+          end
+        }
           .to change { metrics.backpressure_events }.by(1)
       end
 
@@ -409,7 +415,13 @@ RSpec.describe Sidekiq::AsyncHttp::ConnectionPool do
         pool.client_for("https://host1.example.com/")
         pool.client_for("https://host2.example.com/")
 
-        expect { pool.client_for("https://host3.example.com/") rescue nil }
+        expect {
+          begin
+            pool.client_for("https://host3.example.com/")
+          rescue
+            nil
+          end
+        }
           .to change { metrics.backpressure_events }.by_at_least(1)
       end
 
@@ -520,7 +532,13 @@ RSpec.describe Sidekiq::AsyncHttp::ConnectionPool do
         pool.client_for("https://host1.example.com/")
         pool.client_for("https://host2.example.com/")
 
-        expect { pool.client_for("https://host3.example.com/") rescue nil }
+        expect {
+          begin
+            pool.client_for("https://host3.example.com/")
+          rescue
+            nil
+          end
+        }
           .to change { metrics.backpressure_events }.by_at_least(1)
       end
     end

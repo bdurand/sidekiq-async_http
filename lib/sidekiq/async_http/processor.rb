@@ -61,7 +61,7 @@ module Sidekiq
         if timeout && timeout > 0
           deadline = Time.now + timeout
           while @metrics.in_flight_count > 0 && Time.now < deadline
-            sleep(0.1)
+            sleep(0.01)
           end
         end
 
@@ -74,22 +74,20 @@ module Sidekiq
 
         # Re-enqueue each incomplete request
         requests_to_reenqueue.each do |request|
-          begin
-            # Get worker class from request
-            worker_class = resolve_worker_class(request.original_worker_class)
+          # Get worker class from request
+          worker_class = resolve_worker_class(request.original_worker_class)
 
-            # Re-enqueue the original job
-            worker_class.perform_async(*request.original_args)
+          # Re-enqueue the original job
+          worker_class.perform_async(*request.original_args)
 
-            # Log re-enqueue
-            @config.effective_logger&.info(
-              "Re-enqueued incomplete request #{request.id} to #{request.original_worker_class}"
-            )
-          rescue => e
-            @config.effective_logger&.error(
-              "Failed to re-enqueue request #{request.id}: #{e.class} - #{e.message}"
-            )
-          end
+          # Log re-enqueue
+          @config.effective_logger&.info(
+            "Re-enqueued incomplete request #{request.id} to #{request.original_worker_class}"
+          )
+        rescue => e
+          @config.effective_logger&.error(
+            "Failed to re-enqueue request #{request.id}: #{e.class} - #{e.message}"
+          )
         end
 
         # Wait for reactor thread to finish
@@ -262,11 +260,11 @@ module Sidekiq
             handle_success(request, response)
           end
         rescue Async::TimeoutError => e
-          duration = Time.now - start_time
+          Time.now
           @metrics.record_error(request, :timeout)
           handle_error(request, e)
         rescue => e
-          duration = Time.now - start_time
+          Time.now
           error_type = classify_error(e)
           @metrics.record_error(request, error_type)
           handle_error(request, e)
@@ -291,8 +289,6 @@ module Sidekiq
         # Set body if present
         body_content = if request.body
           [request.body]
-        else
-          nil
         end
 
         # Build the request with correct parameter order: scheme, authority, method, path, version, headers, body

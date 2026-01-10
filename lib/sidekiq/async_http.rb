@@ -10,7 +10,7 @@ module Sidekiq::AsyncHttp
   VERSION = File.read(File.join(__dir__, "../../VERSION")).strip
 
   # Autoload all components
-  autoload :AsyncRequest, "sidekiq/async_http/async_request"
+  autoload :Request, "sidekiq/async_http/async_request"
   autoload :HttpRequest, "sidekiq/async_http/http_request"
   autoload :HttpHeaders, "sidekiq/async_http/http_headers"
   autoload :Request, "sidekiq/async_http/request"
@@ -73,27 +73,24 @@ module Sidekiq::AsyncHttp
     # Main public API: enqueue an async HTTP request
     # @param method [Symbol] HTTP method (:get, :post, :put, :patch, :delete, :head, :options)
     # @param url [String] full URL to request
-    # @param success_worker [String] worker class name for success callback
-    # @param error_worker [String] worker class name for error callback
     # @param headers [Hash] request headers
     # @param body [String, nil] request body
+    # @param json [Object, nil] JSON object to serialize as body
     # @param timeout [Float] request timeout in seconds
-    # @param original_args [Array] original job arguments to pass through
-    # @param metadata [Hash] arbitrary user data to pass through
+    # @param open_timeout [Float, nil] connection open timeout in seconds
+    # @param read_timeout [Float, nil] read timeout in seconds
+    # @param write_timeout [Float, nil] write timeout in seconds
+    # @param sidekiq_job [Sidekiq::Job, nil] the Sidekiq job context for the current worker
+    # @param success_worker [String] worker class name for success callback
+    # @param error_worker [String] worker class name for error callback
     # @return [String] request ID
-    def request(method:, url:, success_worker:, error_worker:,
-      headers: {}, body: nil, timeout: nil, original_args: [], metadata: {})
-      Client.request(
-        method: method,
-        url: url,
-        headers: headers,
-        body: body,
-        timeout: timeout,
-        success_worker: success_worker,
-        error_worker: error_worker,
-        original_args: original_args,
-        metadata: metadata
-      )
+    def request(method:, url:,, headers: {}, body: nil, json: nil,
+      timeout: nil, open_timeout: nil, read_timeout: nil, write_timeout: nil,
+      sidekiq_job: nil, success_worker:, error_worker: nil)
+      client = Client.new(timeout: timeout, open_timeout: open_timeout, read_timeout: read_timeout, write_timeout: write_timeout)
+      request = client.async_request(method, url, body: body, json: json, headers: headers)
+      request.perform(sidekiq_job: sidekiq_job, success_worker_class: success_worker, error_worker_class: error_worker)
+      request.id
     end
 
     # Convenience method for GET requests
@@ -136,22 +133,6 @@ module Sidekiq::AsyncHttp
       request(method: :delete, url: url, **options)
     end
 
-    # Convenience method for HEAD requests
-    # @param url [String] full URL to request
-    # @param options [Hash] additional options (see #request)
-    # @return [String] request ID
-    def head(url, **options)
-      request(method: :head, url: url, **options)
-    end
-
-    # Convenience method for OPTIONS requests
-    # @param url [String] full URL to request
-    # @param options [Hash] additional options (see #request)
-    # @return [String] request ID
-    def options(url, **options)
-      request(method: :options, url: url, **options)
-    end
-
     # Start the processor
     # @return [void]
     def start!
@@ -166,6 +147,7 @@ module Sidekiq::AsyncHttp
 
     # Reset all state (useful for testing)
     # @return [void]
+    # @api private
     def reset!
       @processor&.shutdown
       @processor = nil
