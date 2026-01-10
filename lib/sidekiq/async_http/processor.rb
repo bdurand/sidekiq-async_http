@@ -69,28 +69,25 @@ module Sidekiq
           end
         end
 
-        # Re-enqueue any remaining in-flight requests
-        requests_to_reenqueue = []
+        # Re-enqueue any remaining in-flight tasks
+        tasks_to_reenqueue = []
         @in_flight_lock.synchronize do
-          requests_to_reenqueue = @in_flight_requests.values
+          tasks_to_reenqueue = @in_flight_requests.values
           @in_flight_requests.clear
         end
 
-        # Re-enqueue each incomplete request
-        requests_to_reenqueue.each do |request|
-          # Get worker class from request
-          worker_class = resolve_worker_class(request.original_worker_class)
-
+        # Re-enqueue each incomplete task
+        tasks_to_reenqueue.each do |task|
           # Re-enqueue the original job
-          worker_class.perform_async(*request.original_args)
+          task.reenqueue_job
 
           # Log re-enqueue
           @config.effective_logger&.info(
-            "Async HTTP re-enqueued incomplete request #{request.id} to #{request.original_worker_class}"
+            "Async HTTP re-enqueued incomplete request #{task.id} to #{task.job_worker_class.name}"
           )
         rescue => e
           @config.effective_logger&.error(
-            "Async HTTP failed to re-enqueue request #{request.id}: #{e.class} - #{e.message}"
+            "Async HTTP failed to re-enqueue request #{task.id}: #{e.class} - #{e.message}"
           )
         end
 
@@ -111,16 +108,16 @@ module Sidekiq
         @state.set(:draining) if running?
       end
 
-      # Enqueue a request for processing
-      # @param request [Request] the request to enqueue
+      # Enqueue a request task for processing
+      # @param task [RequestTask] the request task to enqueue
       # @raise [RuntimeError] if processor is not running or draining
       # @return [void]
-      def enqueue(request)
+      def enqueue(task)
         unless running? || draining?
           raise "Cannot enqueue request: processor is #{state}"
         end
 
-        @queue.push(request)
+        @queue.push(task)
       end
 
       # Check if processor is running
@@ -194,9 +191,9 @@ module Sidekiq
           loop do
             break if stopping? || @shutdown_barrier.set?
 
-            # Pop request from queue with timeout to periodically check shutdown
-            request = dequeue_request(timeout: 0.1)
-            next unless request
+            # Pop request task from queue with timeout to periodically check shutdown
+            request_task = dequeue_request(timeout: 0.1)
+            next unless request_task
 
             # Check state again after dequeue
             break if stopping?
@@ -207,7 +204,7 @@ module Sidekiq
 
               # Handle backpressure according to configured strategy
               begin
-                @connection_pool.check_capacity!(request)
+                @connection_pool.check_capacity!(request_task.request)
               rescue Sidekiq::AsyncHttp::BackpressureError => e
                 # Request was dropped by backpressure strategy
                 @config.effective_logger&.error("Async HTTP request dropped by backpressure: #{e.message}")
@@ -215,9 +212,9 @@ module Sidekiq
               end
             end
 
-            # Spawn a new fiber to process this request
+            # Spawn a new fiber to process this request task
             task.async do
-              process_request(request)
+              process_request(request_task)
             rescue => e
               @config.effective_logger&.error("Async HTTP Error processing request: #{e.inspect}\n#{e.backtrace.join("\n")}")
             end
@@ -232,9 +229,9 @@ module Sidekiq
         end
       end
 
-      # Dequeue a request with timeout
+      # Dequeue a request task with timeout
       # @param timeout [Numeric] timeout in seconds
-      # @return [Request, nil] the request or nil if timeout
+      # @return [RequestTask, nil] the request task or nil if timeout
       def dequeue_request(timeout:)
         Timeout.timeout(timeout) do
           @queue.pop
@@ -243,30 +240,30 @@ module Sidekiq
         nil
       end
 
-      # Process a single HTTP request
-      # @param request [Request] the request to process
+      # Process a single HTTP request task
+      # @param task [RequestTask] the request task to process
       # @return [void]
-      def process_request(request)
-        # Store request in fiber-local storage for error handling
-        Fiber[:current_request] = request
+      def process_request(task)
+        # Store task in fiber-local storage for error handling
+        Fiber[:current_request] = task
 
-        # Track in-flight request
+        # Track in-flight task
         @in_flight_lock.synchronize do
-          @in_flight_requests[request.id] = request
+          @in_flight_requests[task.id] = task
         end
 
         # Record request start
         start_time = Time.now
-        @metrics.record_request_start(request)
+        @metrics.record_request_start(task)
 
         begin
           # Execute HTTP request with connection pool
-          @connection_pool.with_client(request.url) do |client|
+          @connection_pool.with_client(task.request.url) do |client|
             # Build Async::HTTP::Request
-            http_request = build_http_request(request)
+            http_request = build_http_request(task.request)
 
             # Execute with timeout
-            response_data = Async::Task.current.with_timeout(request.timeout || @config.default_request_timeout) do
+            response_data = Async::Task.current.with_timeout(task.request.timeout || @config.default_request_timeout) do
               async_response = client.call(http_request)
               body = async_response.read
 
@@ -283,27 +280,27 @@ module Sidekiq
             duration = Time.now - start_time
 
             # Build Response object
-            response = build_response(request, response_data, duration)
+            response = build_response(task, response_data, duration)
 
             # Record completion
-            @metrics.record_request_complete(request, duration)
+            @metrics.record_request_complete(task, duration)
 
             # Handle success
-            handle_success(request, response)
+            handle_success(task, response)
           end
         rescue Async::TimeoutError => e
           Time.now
-          @metrics.record_error(request, :timeout)
-          handle_error(request, e)
+          @metrics.record_error(task, :timeout)
+          handle_error(task, e)
         rescue => e
           Time.now
           error_type = classify_error(e)
-          @metrics.record_error(request, error_type)
-          handle_error(request, e)
+          @metrics.record_error(task, error_type)
+          handle_error(task, e)
         ensure
           # Remove from in-flight tracking
           @in_flight_lock.synchronize do
-            @in_flight_requests.delete(request.id)
+            @in_flight_requests.delete(task.id)
           end
           Fiber[:current_request] = nil
         end
@@ -336,11 +333,11 @@ module Sidekiq
       end
 
       # Build a Response object from async response data
-      # @param request [Request] the original request
+      # @param task [RequestTask] the original request task
       # @param response_data [Hash] the response data
       # @param duration [Float] request duration in seconds
       # @return [Response] the response object
-      def build_response(request, response_data, duration)
+      def build_response(task, response_data, duration)
         # For now, return a simple hash-based response
         # This will be replaced with proper Response Data.define object later
         {
@@ -348,10 +345,10 @@ module Sidekiq
           headers: response_data[:headers],
           body: response_data[:body],
           duration: duration,
-          request_id: request.id,
+          request_id: task.id,
           protocol: response_data[:protocol],
-          url: request.url,
-          method: request.method
+          url: task.request.url,
+          method: task.request.method
         }
       end
 
@@ -372,51 +369,51 @@ module Sidekiq
       end
 
       # Handle successful response
-      # @param request [Request] the request
+      # @param task [RequestTask] the request task
       # @param response [Hash] the response hash
       # @return [void]
-      def handle_success(request, response)
+      def handle_success(task, response)
         # Get worker class from class name
-        worker_class = resolve_worker_class(request.success_worker_class)
+        worker_class = resolve_worker_class(task.success_worker)
 
         # Enqueue the success worker with response and original args
-        worker_class.perform_async(response, *request.job_args)
+        worker_class.perform_async(response, *task.job_args)
 
         # Log success
         @config.effective_logger&.info(
-          "Async HTTP request #{request.id} succeeded with status #{response[:status]}, " \
-          "enqueued #{request.success_worker_class}"
+          "Async HTTP request #{task.id} succeeded with status #{response[:status]}, " \
+          "enqueued #{task.success_worker}"
         )
       rescue => e
         # Log error but don't crash the processor
         @config.effective_logger&.error(
-          "Async HTTP failed to enqueue success worker for request #{request.id}: #{e.class} - #{e.message}"
+          "Async HTTP failed to enqueue success worker for request #{task.id}: #{e.class} - #{e.message}"
         )
       end
 
       # Handle error response
-      # @param request [Request] the request
+      # @param task [RequestTask] the request task
       # @param exception [Exception] the exception
       # @return [void]
-      def handle_error(request, exception)
+      def handle_error(task, exception)
         # Build Error object from exception
-        error = Error.from_exception(exception, request_id: request.id)
+        error = Error.from_exception(exception, request_id: task.id)
 
         # Get worker class from class name
-        worker_class = resolve_worker_class(request.error_worker_class)
+        worker_class = resolve_worker_class(task.error_worker)
 
         # Enqueue the error worker with error hash and original args
-        worker_class.perform_async(error.to_h, *request.job_args)
+        worker_class.perform_async(error.to_h, *task.job_args)
 
         # Log error
         @config.effective_logger&.warn(
-          "Async HTTP request #{request.id} failed with #{error.error_type} error (#{error.class_name}): #{error.message}, " \
-          "enqueued #{request.error_worker_class}"
+          "Async HTTP request #{task.id} failed with #{error.error_type} error (#{error.class_name}): #{error.message}, " \
+          "enqueued #{task.error_worker}"
         )
       rescue => e
         # Log error but don't crash the processor
         @config.effective_logger&.error(
-          "Async HTTP failed to enqueue error worker for request #{request.id}: #{e.class} - #{e.message}"
+          "Async HTTP failed to enqueue error worker for request #{task.id}: #{e.class} - #{e.message}"
         )
       end
 

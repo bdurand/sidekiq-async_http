@@ -24,25 +24,32 @@ WebMock.disable_net_connect!
 # Use fake mode for Sidekiq during tests
 Sidekiq::Testing.fake!
 
+# Disable strict args checking for tests since processor uses symbol-keyed hashes
+Sidekiq.strict_args!(false)
+
 # Disable Sidekiq logging during tests
 Sidekiq.logger.level = Logger::FATAL
 
-# Simple test request class that matches what the processor expects
-class TestRequest
-  attr_accessor :id, :method, :url, :headers, :body, :timeout, :success_worker_class, :error_worker_class, :job_args, :original_worker_class, :original_args
+module TestHelper
+  class Worker
+    include Sidekiq::Job
 
-  def initialize(id: "req-123", method: :get, url: "https://api.example.com/users", headers: {}, body: nil, timeout: 30, success_worker_class: nil, error_worker_class: nil, job_args: [], original_worker_class: nil, original_args: [])
-    @id = id
-    @method = method
-    @url = url
-    @headers = headers
-    @body = body
-    @timeout = timeout
-    @success_worker_class = success_worker_class
-    @error_worker_class = error_worker_class
-    @job_args = job_args
-    @original_worker_class = original_worker_class || "TestWorker"
-    @original_args = original_args.any? ? original_args : job_args
+    def perform(*args)
+    end
+  end
+
+  class SuccessWorker
+    include Sidekiq::Job
+
+    def perform(*args)
+    end
+  end
+
+  class ErrorWorker
+    include Sidekiq::Job
+
+    def perform(*args)
+    end
   end
 end
 
@@ -55,21 +62,13 @@ RSpec.configure do |config|
   # Include Async::RSpec::Reactor for async tests
   config.include Async::RSpec::Reactor
 
-  # Reset SidekiqAsyncHttp state between tests
   config.before do
-    # Clear Sidekiq queues
     Sidekiq::Worker.clear_all
-
-    # Reset Sidekiq::AsyncHttp if it has been initialized
-    if defined?(Sidekiq::AsyncHttp) && Sidekiq::AsyncHttp.instance_variable_get(:@processor)
-      Sidekiq::AsyncHttp.processor&.shutdown
-    end
   end
 
   config.after do
-    # Ensure processor is stopped after each test
-    if defined?(Sidekiq::AsyncHttp) && Sidekiq::AsyncHttp.instance_variable_get(:@processor)
-      Sidekiq::AsyncHttp.processor&.shutdown
+    if defined?(Sidekiq::AsyncHttp) && Sidekiq::AsyncHttp.running?
+      Sidekiq::AsyncHttp.processor.shutdown
     end
   end
 end

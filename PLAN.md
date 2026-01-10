@@ -116,23 +116,51 @@ end
 
 ### 1. `Sidekiq::AsyncHttp::Request`
 
-An immutable value object using `Data.define`:
+An immutable value object representing the HTTP request details:
+
+```ruby
+# Attributes:
+# - method: :get, :post, :put, :patch, :delete
+# - url: Full URL string or URI object
+# - headers: Hash of headers
+# - body: String or nil
+# - timeout: Float (seconds), default from configuration
+# - read_timeout: Float (seconds), optional
+# - open_timeout: Float (seconds), optional
+# - write_timeout: Float (seconds), optional
+```
+
+**Note**: The Request class contains only HTTP-specific parameters. It does not include
+callback information or Sidekiq job context. Those belong to the RequestTask wrapper.
+
+### 1a. `Sidekiq::AsyncHttp::RequestTask`
+
+A wrapper around Request that includes callback and job context for the Processor:
 
 ```ruby
 # Attributes:
 # - id: UUID for tracking (auto-generated)
-# - method: :get, :post, :put, :patch, :delete, :head, :options
-# - url: Full URL string
-# - headers: Hash of headers
-# - body: String or nil
-# - timeout: Float (seconds), default 30
-# - original_worker_class: String (class name of initiating worker)
-# - success_worker_class: String (class name for success callback)
-# - error_worker_class: String (class name for error callback)
-# - original_args: Array (original job arguments to pass through)
-# - enqueued_at: Time (auto-generated)
-# - metadata: Hash (arbitrary user data to pass through)
+# - request: Request object (the HTTP request details)
+# - sidekiq_job: Hash (the Sidekiq job hash with class, jid, args, etc.)
+# - success_worker: String (class name for success callback)
+# - error_worker: String (class name for error callback, optional)
+# - enqueued_at: Time (when task was enqueued)
+# - started_at: Time (when HTTP request started)
+# - completed_at: Time (when HTTP request completed)
+#
+# Methods:
+# - #job_worker_class_name - returns the original worker class name
+# - #jid - returns the job ID
+# - #job_args - returns the job arguments
+# - #reenqueue_job - re-enqueues the original Sidekiq job
+# - #retry_job - increments retry count and re-enqueues
+# - #enqueued_duration - time between enqueue and start
+# - #execution_duration - time between start and completion
 ```
+
+**Design Rationale**: Separating Request and RequestTask allows the Request object to focus
+solely on HTTP concerns, making it simpler and more reusable. The RequestTask adds the
+context needed for async processing and callbacks.
 
 ### 2. `Sidekiq::AsyncHttp::Response`
 
@@ -869,15 +897,15 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
 ### Phase 7: Client (Public API)
 
 ```
-[ ] 7.1 Implement Request validation and Sidekiq job handling:
+[X] 7.1 Implement Request validation and Sidekiq job handling:
         - Update Request#perform to validate parameters:
           - sidekiq_job: required hash with "class" and "args" keys minimum
-          - If sidekiq_job not provided, use Sidekiq::Context.current (Sidekiq 8+)
-          - success_worker: required string, worker class name for success callback
-          - error_worker: optional string, worker class name for error callback
+          - If sidekiq_job not provided, use Sidekiq::Context.current
+          - success_worker: required class that includes Sidekiq::Job
+          - error_worker: optional class that includes Sidekiq::Job
           - If no error_worker provided, log error and retry original job
         - Add Request#validate! method:
-          - Validate request has method (symbol)
+          - Validate request has valid method (:get, :post, :patch, :put, :delete)
           - Validate request has url (String or URI object)
           - Raise ArgumentError with descriptive message if invalid
         - Add validation to Client#async_request:
@@ -1222,9 +1250,10 @@ metrics = Sidekiq::AsyncHttp.metrics.to_h
 2. **Circuit breaker** - Per-host circuit breakers for failing endpoints
 3. **Retry with backoff** - Built-in retry logic for transient failures
 4. **Request deduplication** - Prevent duplicate in-flight requests
-5. **Prometheus metrics exporter** - Export metrics in Prometheus format
+5. **Record current metrics to Redis** - Integrate with Sidekiq's built-in stats system
 6. **Web UI** - Sidekiq Web extension showing async HTTP stats
-7. **Worker DSL Module** - Includable module providing:
+7. **Prometheus metrics exporter** - Export metrics in Prometheus format
+8. **Worker DSL Module** - Includable module providing:
    - Class-level `async_http_callbacks` for default success/error workers
    - Instance methods `async_get`, `async_post`, etc.
    - Automatic capture of job arguments for callbacks

@@ -31,23 +31,43 @@ module Sidekiq::AsyncHttp
     # @param params [Hash] query parameters to add to URL
     # @return [Request] request object that must have perform() called
     def async_request(method, uri, body: nil, json: nil, headers: {}, params: {})
+      # Validate method
+      unless method.is_a?(Symbol)
+        raise ArgumentError, "method must be a Symbol, got: #{method.class}"
+      end
+
+      # Validate uri
+      if uri.nil? || (uri.is_a?(String) && uri.empty?)
+        raise ArgumentError, "uri is required"
+      end
+
+      # Build full URI
       full_uri = URI.join(@base_url, uri)
       if params.any?
         query_string = URI.encode_www_form(params)
         full_uri.query = [full_uri.query, query_string].compact.join("&")
       end
-      full_uri.to_s
 
+      # Merge headers
       merged_headers = headers.any? ? @headers.merge(headers) : @headers
 
+      # Handle JSON body
+      request_body = body
       if json
         raise ArgumentError, "Cannot provide both body and json" if body
 
-        JSON.generate(json)
-        merged_headers.merge({"Content-Type" => "application/json encoding=utf-8"})
+        request_body = JSON.generate(json)
+        merged_headers = merged_headers.merge({"Content-Type" => "application/json; encoding=utf-8"})
       end
 
-      Request.new(self)
+      # Create request with all parameters
+      Request.new(
+        method: method,
+        url: full_uri.to_s,
+        headers: merged_headers.to_h,
+        body: request_body,
+        timeout: @timeout
+      )
     end
 
     def async_get(uri, **kwargs)

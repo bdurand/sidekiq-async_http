@@ -17,14 +17,14 @@ module Sidekiq
       end
 
       # Record the start of a request
-      # @param request [Request] the request being started
+      # @param task [RequestTask] the request task being started
       # @return [void]
       def record_request_start(request)
         @in_flight_requests[request.id] = request
       end
 
       # Record the completion of a request
-      # @param request [Request] the completed request
+      # @param task [RequestTask] the completed request task
       # @param duration [Float] request duration in seconds
       # @return [void]
       def record_request_complete(request, duration)
@@ -40,7 +40,7 @@ module Sidekiq
       end
 
       # Record an error
-      # @param request [Request] the failed request
+      # @param task [RequestTask] the failed request task
       # @param error_type [Symbol] the error type (:timeout, :connection, :ssl, :protocol, :unknown)
       # @return [void]
       def record_error(request, error_type)

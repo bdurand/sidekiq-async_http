@@ -6,7 +6,16 @@
 [![Ruby Style Guide](https://img.shields.io/badge/code_style-standard-brightgreen.svg)](https://github.com/testdouble/standard)
 [![Gem Version](https://badge.fury.io/rb/sidekiq-async_http_requests.svg)](https://badge.fury.io/rb/sidekiq-async_http_requests)
 
-TODO: Write a gem description
+Offload HTTP requests from Sidekiq workers to a dedicated async I/O processor, freeing worker threads immediately.
+
+## Architecture
+
+The gem uses two key classes for handling async HTTP requests:
+
+- **Request**: Contains HTTP-specific parameters (method, URL, headers, body, timeout)
+- **RequestTask**: Wraps a Request with callback and job context needed for async processing (job ID, worker classes, timing information)
+
+The Processor accepts `RequestTask` objects via its `enqueue` method, executes the HTTP request asynchronously, and invokes success or error callback workers with the results.
 
 ## Usage
 

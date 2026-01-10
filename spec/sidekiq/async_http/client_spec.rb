@@ -57,9 +57,33 @@ RSpec.describe Sidekiq::AsyncHttp::Client do
       expect(result).to be_a(Sidekiq::AsyncHttp::Request)
     end
 
-    it "passes itself to the Request" do
-      result = client.async_request(:get, "/users")
-      expect(result.request).to eq(client)
+    it "creates Request with method, url, headers, body, and timeout" do
+      result = client.async_request(:post, "/users", body: "data")
+      expect(result.method).to eq(:post)
+      expect(result.url).to eq("https://api.example.com/users")
+      expect(result.headers).to include("authorization" => "Bearer token123")
+      expect(result.body).to eq("data")
+      expect(result.timeout).to eq(30)
+    end
+
+    context "validation" do
+      it "validates method is a symbol" do
+        expect do
+          client.async_request("get", "/users")
+        end.to raise_error(ArgumentError, "method must be a Symbol, got: String")
+      end
+
+      it "validates uri is provided" do
+        expect do
+          client.async_request(:get, nil)
+        end.to raise_error(ArgumentError, "uri is required")
+      end
+
+      it "validates uri is not empty" do
+        expect do
+          client.async_request(:get, "")
+        end.to raise_error(ArgumentError, "uri is required")
+      end
     end
 
     context "with URI joining" do
@@ -119,15 +143,12 @@ RSpec.describe Sidekiq::AsyncHttp::Client do
     end
 
     context "with JSON body" do
-      it "converts json to string body" do
+      it "converts json to string body and sets Content-Type header" do
         data = {name: "John", email: "john@example.com"}
-        client.async_request(:post, "/users", json: data)
-        # Should serialize to JSON
-      end
+        result = client.async_request(:post, "/users", json: data)
 
-      it "sets Content-Type header for JSON" do
-        client.async_request(:post, "/users", json: {name: "John"})
-        # Should set application/json content type
+        expect(result.body).to eq(JSON.generate(data))
+        expect(result.headers["content-type"]).to eq("application/json; encoding=utf-8")
       end
 
       it "raises error when both body and json are provided" do
@@ -146,6 +167,7 @@ RSpec.describe Sidekiq::AsyncHttp::Client do
         }
         result = client.async_request(:post, "/users", json: data)
         expect(result).to be_a(Sidekiq::AsyncHttp::Request)
+        expect(result.body).to eq(JSON.generate(data))
       end
     end
 

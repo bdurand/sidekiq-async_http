@@ -4,7 +4,21 @@ require "spec_helper"
 
 RSpec.describe Sidekiq::AsyncHttp::Metrics do
   let(:metrics) { described_class.new }
-  let(:request) { TestRequest.new(id: "req-123") }
+  let(:request) do
+    create_request_task
+  end
+
+  def create_request_task(method: :get, url: "https://api.example.com/users")
+    req = Sidekiq::AsyncHttp::Request.new(
+      method: method,
+      url: url
+    )
+    Sidekiq::AsyncHttp::RequestTask.new(
+      request: req,
+      sidekiq_job: {"class" => "TestHelper::Worker", "jid" => "jid-123", "args" => []},
+      success_worker: "TestHelper::SuccessWorker"
+    )
+  end
 
   describe "#initialize" do
     it "initializes with zero counts" do
@@ -31,9 +45,9 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
     end
 
     it "tracks multiple in-flight requests" do
-      request1 = TestRequest.new(id: "req-1")
-      request2 = TestRequest.new(id: "req-2")
-      request3 = TestRequest.new(id: "req-3")
+      request1 = create_request_task()
+      request2 = create_request_task()
+      request3 = create_request_task()
 
       metrics.record_request_start(request1)
       metrics.record_request_start(request2)
@@ -68,8 +82,8 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
     end
 
     it "calculates correct average with multiple requests" do
-      request2 = TestRequest.new(id: "req-2")
-      request3 = TestRequest.new(id: "req-3")
+      request2 = create_request_task()
+      request3 = create_request_task()
 
       metrics.record_request_start(request2)
       metrics.record_request_start(request3)
@@ -96,8 +110,8 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
     end
 
     it "increments existing error types" do
-      request2 = TestRequest.new(id: "req-2")
-      request3 = TestRequest.new(id: "req-3")
+      request2 = create_request_task()
+      request3 = create_request_task()
 
       metrics.record_error(request, :timeout)
       metrics.record_error(request2, :timeout)
@@ -111,7 +125,7 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
       error_types = %i[timeout connection ssl protocol unknown]
 
       error_types.each_with_index do |type, index|
-        req = TestRequest.new(id: "req-#{index}")
+        req = create_request_task()
         metrics.record_error(req, type)
       end
 
@@ -181,8 +195,8 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
     end
 
     it "returns snapshot at time of call" do
-      request1 = TestRequest.new(id: "req-1")
-      request2 = TestRequest.new(id: "req-2")
+      request1 = create_request_task()
+      request2 = create_request_task()
 
       metrics.record_request_start(request1)
       snapshot = metrics.in_flight_requests
@@ -205,7 +219,7 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
       metrics.record_error(request, :timeout)
       snapshot = metrics.errors_by_type
 
-      request2 = TestRequest.new(id: "req-2")
+      request2 = create_request_task()
       metrics.record_error(request2, :connection)
 
       expect(snapshot).to eq({timeout: 1})
@@ -253,7 +267,7 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
 
     it "returns consistent snapshot" do
       10.times do |i|
-        req = TestRequest.new(id: "req-#{i}")
+        req = create_request_task()
         metrics.record_request_start(req)
         metrics.record_request_complete(req, 1.0)
       end
@@ -302,7 +316,7 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
       num_threads.times do |i|
         threads << Thread.new do
           requests_per_thread.times do |j|
-            req = TestRequest.new(id: "req-#{i}-#{j}")
+            req = create_request_task()
             metrics.record_request_start(req)
             metrics.record_request_complete(req, rand(0.1..2.0))
           end
@@ -324,7 +338,7 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
       num_threads.times do |i|
         threads << Thread.new do
           errors_per_thread.times do |j|
-            req = TestRequest.new(id: "req-#{i}-#{j}")
+            req = create_request_task()
             error_type = error_types.sample
             metrics.record_error(req, error_type)
           end
@@ -387,7 +401,7 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
       # Thread 1: Start requests
       threads << Thread.new do
         num_operations.times do |i|
-          req = TestRequest.new(id: "req-1-#{i}")
+          req = create_request_task()
           metrics.record_request_start(req)
         end
       end
@@ -395,7 +409,7 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
       # Thread 2: Complete requests
       threads << Thread.new do
         num_operations.times do |i|
-          req = TestRequest.new(id: "req-2-#{i}")
+          req = create_request_task()
           metrics.record_request_start(req)
           metrics.record_request_complete(req, rand(0.1..2.0))
         end
@@ -404,7 +418,7 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
       # Thread 3: Record errors
       threads << Thread.new do
         num_operations.times do |i|
-          req = TestRequest.new(id: "req-3-#{i}")
+          req = create_request_task()
           metrics.record_error(req, :timeout)
         end
       end
