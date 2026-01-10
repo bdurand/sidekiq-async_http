@@ -114,7 +114,7 @@ end
 
 ## Component Design
 
-### 1. `SidekiqAsyncHttp::Request`
+### 1. `Sidekiq::AsyncHttp::Request`
 
 An immutable value object using `Data.define`:
 
@@ -134,7 +134,7 @@ An immutable value object using `Data.define`:
 # - metadata: Hash (arbitrary user data to pass through)
 ```
 
-### 2. `SidekiqAsyncHttp::Response`
+### 2. `Sidekiq::AsyncHttp::Response`
 
 An immutable value object representing the HTTP response:
 
@@ -154,7 +154,7 @@ An immutable value object representing the HTTP response:
 # - #server_error? (status 500-599)
 ```
 
-### 3. `SidekiqAsyncHttp::Error`
+### 3. `Sidekiq::AsyncHttp::Error`
 
 A serializable error representation using `Data.define`:
 
@@ -170,7 +170,7 @@ A serializable error representation using `Data.define`:
 # - .from_exception(exception, request_id:) - uses pattern matching for classification
 ```
 
-### 4. `SidekiqAsyncHttp::Configuration`
+### 4. `Sidekiq::AsyncHttp::Configuration`
 
 Global configuration with sensible defaults:
 
@@ -218,10 +218,10 @@ end
 | Strategy | Behavior |
 |----------|----------|
 | `:block` | Block the calling thread until a slot is available |
-| `:raise` | Raise `SidekiqAsyncHttp::BackpressureError` immediately |
+| `:raise` | Raise `Sidekiq::AsyncHttp::BackpressureError` immediately |
 | `:drop_oldest` | Cancel oldest in-flight request, re-enqueue its original worker |
 
-### 5. `SidekiqAsyncHttp::Metrics`
+### 5. `Sidekiq::AsyncHttp::Metrics`
 
 Thread-safe metrics collection using `Concurrent::AtomicFixnum` and `Concurrent::Map`:
 
@@ -240,7 +240,7 @@ Thread-safe metrics collection using `Concurrent::AtomicFixnum` and `Concurrent:
 # - queue_depth: Integer (requests waiting to be sent)
 ```
 
-### 6. `SidekiqAsyncHttp::ConnectionPool`
+### 6. `Sidekiq::AsyncHttp::ConnectionPool`
 
 Wrapper around `Async::HTTP::Client` management:
 
@@ -259,7 +259,7 @@ Wrapper around `Async::HTTP::Client` management:
 # - #stats - returns connection statistics
 ```
 
-### 7. `SidekiqAsyncHttp::Processor`
+### 7. `Sidekiq::AsyncHttp::Processor`
 
 The heart of the gem. Runs in a dedicated thread and manages the async reactor:
 
@@ -278,13 +278,13 @@ The heart of the gem. Runs in a dedicated thread and manages the async reactor:
 # States: :stopped, :running, :draining, :stopping
 ```
 
-### 8. `SidekiqAsyncHttp::Client`
+### 8. `Sidekiq::AsyncHttp::Client`
 
 The public API that Sidekiq workers use:
 
 ```ruby
 # Main method:
-# SidekiqAsyncHttp.request(
+# Sidekiq::AsyncHttp.request(
 #   method: :post,
 #   url: "https://api.example.com/webhooks",
 #   headers: { "Content-Type" => "application/json" },
@@ -296,22 +296,22 @@ The public API that Sidekiq workers use:
 # )
 #
 # Convenience methods:
-# - SidekiqAsyncHttp.get(url, **options)
-# - SidekiqAsyncHttp.post(url, **options)
-# - SidekiqAsyncHttp.put(url, **options)
-# - SidekiqAsyncHttp.patch(url, **options)
-# - SidekiqAsyncHttp.delete(url, **options)
+# - Sidekiq::AsyncHttp.get(url, **options)
+# - Sidekiq::AsyncHttp.post(url, **options)
+# - Sidekiq::AsyncHttp.put(url, **options)
+# - Sidekiq::AsyncHttp.patch(url, **options)
+# - Sidekiq::AsyncHttp.delete(url, **options)
 ```
 
-### 9. `SidekiqAsyncHttp::Lifecycle`
+### 9. `Sidekiq::AsyncHttp::Lifecycle`
 
 Hooks into Sidekiq's lifecycle for startup and shutdown:
 
 ```ruby
 # Sidekiq.configure_server do |config|
-#   config.on(:startup) { SidekiqAsyncHttp.start }
-#   config.on(:quiet) { SidekiqAsyncHttp.quiet }     # Stop accepting new requests
-#   config.on(:shutdown) { SidekiqAsyncHttp.stop }   # Graceful shutdown
+#   config.on(:startup) { Sidekiq::AsyncHttp.start }
+#   config.on(:quiet) { Sidekiq::AsyncHttp.quiet }     # Stop accepting new requests
+#   config.on(:shutdown) { Sidekiq::AsyncHttp.stop }   # Graceful shutdown
 # end
 ```
 
@@ -327,7 +327,7 @@ Hooks into Sidekiq's lifecycle for startup and shutdown:
 ### Happy Path
 
 ```
-1. Worker calls SidekiqAsyncHttp.request(...)
+1. Worker calls Sidekiq::AsyncHttp.request(...)
 2. Client builds Request object with UUID
 3. Request pushed to Thread::Queue
 4. Worker returns immediately (Sidekiq job completes)
@@ -356,9 +356,9 @@ Hooks into Sidekiq's lifecycle for startup and shutdown:
 
 ```
 1. SIGTERM received by Sidekiq
-2. Sidekiq fires :quiet event → SidekiqAsyncHttp.quiet called
+2. Sidekiq fires :quiet event → Sidekiq::AsyncHttp.quiet called
 3. Processor stops accepting new requests (returns error for new requests)
-4. Sidekiq fires :shutdown event → SidekiqAsyncHttp.stop called
+4. Sidekiq fires :shutdown event → Sidekiq::AsyncHttp.stop called
 5. Processor waits up to shutdown_timeout for in-flight requests
 6. For any remaining in-flight requests:
    a. Cancel the HTTP request
@@ -407,7 +407,7 @@ With HTTP/2:    1000 concurrent requests to same host = ~10-50 connections
 
 **Small (default) - Development / Low traffic:**
 ```ruby
-SidekiqAsyncHttp.configure do |config|
+Sidekiq::AsyncHttp.configure do |config|
   config.connection_limit_per_host = 8
   config.max_connections_total = 64
   config.max_in_flight_requests = 100
@@ -419,7 +419,7 @@ end
 
 **Medium - Standard production:**
 ```ruby
-SidekiqAsyncHttp.configure do |config|
+Sidekiq::AsyncHttp.configure do |config|
   config.connection_limit_per_host = 32
   config.max_connections_total = 256
   config.max_in_flight_requests = 1_000
@@ -431,7 +431,7 @@ end
 
 **Large - High throughput:**
 ```ruby
-SidekiqAsyncHttp.configure do |config|
+Sidekiq::AsyncHttp.configure do |config|
   config.connection_limit_per_host = 64
   config.max_connections_total = 1024
   config.max_in_flight_requests = 10_000
@@ -443,7 +443,7 @@ end
 
 **Extra Large - Extreme throughput:**
 ```ruby
-SidekiqAsyncHttp.configure do |config|
+Sidekiq::AsyncHttp.configure do |config|
   config.connection_limit_per_host = 128
   config.max_connections_total = 4096
   config.max_in_flight_requests = 50_000
@@ -472,9 +472,10 @@ sidekiq-async-http/
 ├── lib/
 │   ├── sidekiq-async_http.rb
 │   └── sidekiq-async_http/
-│       ├── version.rb
 │       ├── configuration.rb
+│       ├── async_request.rb
 │       ├── request.rb
+|       ├── http_headers.rb
 │       ├── response.rb
 │       ├── error.rb
 │       ├── processor.rb
@@ -566,45 +567,46 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
 ```
 [x] 1.1 Create gem skeleton with bundler (`bundle gem sidekiq-async-http`)
 
-[ ] 1.2 Configure gemspec with metadata and dependencies:
+[x] 1.2 Configure gemspec with metadata and dependencies:
         - Set required_ruby_version >= 3.2.0
         - Add runtime dependencies: sidekiq >= 7.0, async ~> 2.0,
           async-http ~> 0.60, concurrent-ruby ~> 1.2
 
-[ ] 1.3 Set up RSpec with spec_helper.rb including:
+[x] 1.3 Set up RSpec with spec_helper.rb including:
         - SimpleCov for coverage (start before requiring lib)
         - WebMock configuration (disable_net_connect!)
         - Async::RSpec helpers (include Async::RSpec::Reactor)
         - Sidekiq::Testing.fake! mode
-        - Helper to reset SidekiqAsyncHttp between tests
+        - Helper to reset Sidekiq::AsyncHttp between tests
 
-[ ] 1.4 Create .standard.yml:
+[x] 1.4 Create .standard.yml:
         - Set ruby_version: 3.2
 
-[ ] 1.5 Create Rakefile with default task running standardrb and rspec
+[x] 1.5 Create Rakefile with default task running standardrb and rspec
 
-[ ] 1.6 Create lib/sidekiq-async_http.rb with:
+[x] 1.6 Create lib/sidekiq-async_http.rb with:
         - Module skeleton
         - Autoloads for all components
         - Module-level accessors for configuration, processor, metrics
         - Public API method stubs
 
-[ ] 1.7 Verify `bundle exec rake` runs successfully (standardrb + empty specs)
+[x] 1.7 Verify `bundle exec rake` runs successfully (standardrb + empty specs)
 ```
 
 ### Phase 2: Value Objects
 
 ```
-[ ] 2.1 Implement Request using Data.define:
-        - Define with: id, method, url, headers, body, timeout,
-          original_worker_class, success_worker_class, error_worker_class,
-          original_args, enqueued_at, metadata
+[x] 2.0 Define builder pattern object for building an HTTP request.
+        - Define builder object with attributes: http_method, url, headers, params, body, timeout, open_timeout, read_timeout, write_timeout
+        - Calling any of the attribute methods on the builder object creates a new builder object with that attribute set to the specified value and returns it.
+        - Calling `header` or `param` will merge the value with the existing hash. Calling `headers` or `params` will replace the entire hash.
+        - Calling `request` will return a Data object with all attributes set.
+        - Write specs for each attribute method and the final `request` method.
+[x] 2.1 Implement AsyncRequest:
+        - Define with: id, request, original_worker_class, success_worker_class,
+          error_worker_class, original_args, enqueued_at, metadata
         - Override initialize for defaults:
           - id: SecureRandom.uuid
-          - method: :get
-          - headers: {}
-          - body: nil
-          - timeout: 30
           - enqueued_at: Time.now
           - metadata: {}
         - Add #validate! method that raises ArgumentError for:
@@ -620,22 +622,22 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
           - Validation errors
           - Serialization round-trip
 
-[ ] 2.2 Implement Response using Data.define:
-        - Define with: status, headers, body, duration, request_id, protocol
-        - Override initialize with defaults:
-          - headers: {}
-          - body: ""
-          - protocol: "HTTP/1.1"
+[x] 2.2 Implement Response:
+        - Define with: status, headers, body, duration, request_id, protocol, url, method
+        - Initialize takes an Async::HTTP::Response, duration, and request_id
+        - Headers is an instance of Sidekiq::AsyncHttp::HttpHeaders
         - Implement predicate methods:
           - #success? (status 200-299)
           - #redirect? (status 300-399)
           - #client_error? (status 400-499)
           - #server_error? (status 500-599)
+          - #error? (400-599)
         - Implement #to_h with string keys
-        - Implement .from_h class method
+        - Implement .from_h class method to reconstruct from hash
+        - Implement #json to return parsed JSON body if Content-Type is application/json or raise an error otherwise
         - Write specs for all predicates and serialization
 
-[ ] 2.3 Implement Error using Data.define:
+[x] 2.3 Implement Error:
         - Define with: class_name, message, backtrace, request_id, error_type
         - Define ERROR_TYPES = %i[timeout connection ssl protocol unknown].freeze
         - Implement .from_exception(exception, request_id:) using pattern matching:
@@ -646,6 +648,7 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
           - else → :unknown
         - Implement #to_h with string keys
         - Implement .from_h class method
+        - Implement #error_class that returns the actual Exception class constant from the class_name
         - Write specs for each exception type classification
 ```
 
@@ -672,11 +675,11 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
         - Write specs for defaults, custom values, and validation errors
 
 [ ] 3.2 Add configuration DSL to main module:
-        - SidekiqAsyncHttp.configure { |config| ... } - yields Config::Builder
+        - Sidekiq::AsyncHttp.configure { |config| ... } - yields Config::Builder
         - Implement Config::Builder class that collects settings and builds
           immutable Configuration
-        - SidekiqAsyncHttp.configuration - returns current frozen config
-        - SidekiqAsyncHttp.reset_configuration! - resets to defaults (for testing)
+        - Sidekiq::AsyncHttp.configuration - returns current frozen config
+        - Sidekiq::AsyncHttp.reset_configuration! - resets to defaults (for testing)
         - Write specs for DSL usage and reset behavior
 ```
 
@@ -760,7 +763,7 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
           - Use Async::Condition to wait for available slot
           - Wake waiters when connection is released
         - For :raise strategy:
-          - Raise SidekiqAsyncHttp::BackpressureError immediately
+          - Raise Sidekiq::AsyncHttp::BackpressureError immediately
         - For :drop_oldest strategy:
           - Coordinate with Processor to cancel oldest request
           - This requires callback/event mechanism
@@ -775,7 +778,7 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
         - Initialize with:
           - @queue = Thread::Queue.new
           - @metrics = Metrics.new
-          - @config = SidekiqAsyncHttp.configuration
+          - @config = Sidekiq::AsyncHttp.configuration
           - @connection_pool = ConnectionPool.new(@config)
           - @state = Concurrent::AtomicReference.new(:stopped)
           - @reactor_thread = nil
@@ -882,7 +885,7 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
 ### Phase 7: Client (Public API)
 
 ```
-[ ] 7.1 Implement Client module methods on SidekiqAsyncHttp:
+[ ] 7.1 Implement Client module methods on Sidekiq::AsyncHttp:
         - Implement .request(**options):
           - Validate required options: url, success_worker, error_worker
           - Build Request object with:
@@ -899,7 +902,7 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
           - Call request.validate!
           - Call processor.enqueue(request)
           - Return request.id
-        - Raise SidekiqAsyncHttp::NotRunningError if processor not running
+        - Raise Sidekiq::AsyncHttp::NotRunningError if processor not running
         - Write specs for:
           - Successful request enqueue
           - Validation errors
@@ -926,16 +929,16 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
 
 ```
 [ ] 8.1 Implement Lifecycle module:
-        - SidekiqAsyncHttp.start:
+        - Sidekiq::AsyncHttp.start:
           - Return if already running
           - Create new Processor
           - Call processor.start
           - Log startup at info level
-        - SidekiqAsyncHttp.quiet:
+        - Sidekiq::AsyncHttp.quiet:
           - Return unless running
           - Call processor.drain
           - Log quiet at info level
-        - SidekiqAsyncHttp.stop:
+        - Sidekiq::AsyncHttp.stop:
           - Return unless running
           - Call processor.stop(timeout: configuration.shutdown_timeout)
           - Set @processor = nil
@@ -945,9 +948,9 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
 [ ] 8.2 Create Sidekiq server middleware/hooks:
         - Create lib/sidekiq-async_http/sidekiq.rb:
           - Sidekiq.configure_server do |config|
-              config.on(:startup) { SidekiqAsyncHttp.start }
-              config.on(:quiet) { SidekiqAsyncHttp.quiet }
-              config.on(:shutdown) { SidekiqAsyncHttp.stop }
+              config.on(:startup) { Sidekiq::AsyncHttp.start }
+              config.on(:quiet) { Sidekiq::AsyncHttp.quiet }
+              config.on(:shutdown) { Sidekiq::AsyncHttp.stop }
             end
         - User just needs to require "sidekiq-async_http/sidekiq" in initializer
         - Document in README
@@ -1105,7 +1108,7 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
 ```ruby
 require "sidekiq-async_http/sidekiq"
 
-SidekiqAsyncHttp.configure do |config|
+Sidekiq::AsyncHttp.configure do |config|
   config.connection_limit_per_host = 16
   config.max_connections_total = 256
   config.max_in_flight_requests = 1_000
@@ -1124,7 +1127,7 @@ class WebhookDeliveryWorker
   def perform(webhook_id, payload)
     webhook = Webhook.find(webhook_id)
 
-    SidekiqAsyncHttp.post(
+    Sidekiq::AsyncHttp.post(
       webhook.url,
       headers: {
         "Content-Type" => "application/json",
@@ -1157,7 +1160,7 @@ class WebhookSuccessWorker
   include Sidekiq::Job
 
   def perform(response, webhook_id, payload)
-    response = SidekiqAsyncHttp::Response.from_h(response)
+    response = Sidekiq::AsyncHttp::Response.from_h(response)
     webhook = Webhook.find(webhook_id)
 
     if response.success?
@@ -1179,7 +1182,7 @@ class WebhookErrorWorker
   include Sidekiq::Job
 
   def perform(error, webhook_id, payload)
-    error = SidekiqAsyncHttp::Error.from_h(error)
+    error = Sidekiq::AsyncHttp::Error.from_h(error)
     webhook = Webhook.find(webhook_id)
 
     webhook.update!(
@@ -1199,7 +1202,7 @@ end
 
 ```ruby
 # In a monitoring endpoint or admin panel
-metrics = SidekiqAsyncHttp.metrics.to_h
+metrics = Sidekiq::AsyncHttp.metrics.to_h
 # => {
 #   in_flight_count: 42,
 #   total_requests: 15_234,
@@ -1230,7 +1233,7 @@ metrics = SidekiqAsyncHttp.metrics.to_h
    ```ruby
    class WebhookDeliveryWorker
      include Sidekiq::Job
-     include SidekiqAsyncHttp::Worker
+     include Sidekiq::AsyncHttp::Worker
 
      async_http_callbacks(
        success: "WebhookSuccessWorker",
