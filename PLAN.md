@@ -757,7 +757,7 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
 ### Phase 6: Processor (Core)
 
 ```
-[ ] 6.1 Implement Processor class - basic structure:
+[x] 6.1 Implement Processor class - basic structure:
         - Initialize with:
           - @queue = Thread::Queue.new
           - @metrics = Metrics.new
@@ -787,7 +787,7 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
           - Push to @queue
         - Write specs for state transitions
 
-[ ] 6.2 Implement Processor - reactor loop:
+[x] 6.2 Implement Processor - reactor loop:
         - In reactor thread, run Async do |task| ... end
         - Create consumer fiber that loops:
           - Pop request from @queue (with timeout to check for shutdown)
@@ -801,7 +801,7 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
           - Fibers are spawned
           - Backpressure is applied at limit
 
-[ ] 6.3 Implement Processor - HTTP execution fiber:
+[x] 6.3 Implement Processor - HTTP execution fiber:
         - Set Fiber[:current_request] = request
         - Record request start in metrics
         - Start timer for duration tracking
@@ -816,9 +816,9 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
         - Call #handle_success(request, response)
         - Write specs with mocked HTTP client
 
-[ ] 6.4 Implement Processor - success callback:
+[x] 6.4 Implement Processor - success callback:
         - Implement #handle_success(request, response):
-          - Get worker class: Object.const_get(request.success_worker_class)
+          - Get worker class from class name taking into account module namespaces
           - Enqueue job: worker_class.perform_async(response.to_h, *request.original_args)
           - Log success at debug level
         - Handle errors during enqueue (log and continue)
@@ -827,12 +827,12 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
           - Job is enqueued with correct arguments
           - Response is properly serialized
 
-[ ] 6.5 Implement Processor - error handling:
+[x] 6.5 Implement Processor - error handling:
         - Wrap HTTP execution in rescue block
         - Implement #handle_error(request, exception):
           - Build Error using Error.from_exception(exception, request_id: request.id)
           - Record error in metrics
-          - Get worker class: Object.const_get(request.error_worker_class)
+          - Get worker class from class name taking into account module namespaces
           - Enqueue job: worker_class.perform_async(error.to_h, *request.original_args)
           - Log error at warn level
         - Write specs for:
@@ -842,7 +842,7 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
           - Protocol errors
           - Unknown errors
 
-[ ] 6.6 Implement Processor - graceful shutdown:
+[x] 6.6 Implement Processor - graceful shutdown:
         - In #stop:
           - Set state to :stopping
           - Signal reactor to stop accepting new requests

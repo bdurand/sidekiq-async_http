@@ -1,2 +1,3 @@
 - Run the test suite with `bundle exec rspec`.
+- Avoid using double and instance_double in favor of using real instances of classes when possible.
 - Always include the # frozen_string_literal: true magic comment at the top of each ruby file.

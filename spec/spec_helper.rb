@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+# Suppress experimental feature warnings (IO::Buffer used by async gems)
+Warning[:experimental] = false
+
 # SimpleCov must be started before requiring the lib
 require "simplecov"
 SimpleCov.start do
@@ -20,6 +23,28 @@ WebMock.disable_net_connect!
 
 # Use fake mode for Sidekiq during tests
 Sidekiq::Testing.fake!
+
+# Disable Sidekiq logging during tests
+Sidekiq.logger.level = Logger::FATAL
+
+# Simple test request class that matches what the processor expects
+class TestRequest
+  attr_accessor :id, :method, :url, :headers, :body, :timeout, :success_worker_class, :error_worker_class, :job_args, :original_worker_class, :original_args
+
+  def initialize(id: "req-123", method: :get, url: "https://api.example.com/users", headers: {}, body: nil, timeout: 30, success_worker_class: nil, error_worker_class: nil, job_args: [], original_worker_class: nil, original_args: [])
+    @id = id
+    @method = method
+    @url = url
+    @headers = headers
+    @body = body
+    @timeout = timeout
+    @success_worker_class = success_worker_class
+    @error_worker_class = error_worker_class
+    @job_args = job_args
+    @original_worker_class = original_worker_class || "TestWorker"
+    @original_args = original_args.any? ? original_args : job_args
+  end
+end
 
 RSpec.configure do |config|
   config.disable_monkey_patching!

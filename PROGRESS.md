@@ -404,5 +404,453 @@ error.error_class # => StandardError or nil
 
 ## Next Steps
 
-Ready to proceed with **Phase 3: Configuration - Item 3.1**
-- Implement Configuration using Data.define
+Ready to proceed with **Phase 6: Processor Core - Item 6.3**
+- Implement HTTP execution fiber
+
+---
+
+## Phase 6: Processor Core - Item 6.2 ✅ COMPLETED
+
+**Date Completed:** January 13, 2026
+
+### 6.2 Implement Processor - reactor loop ✅
+
+Enhanced the Processor class with a complete async reactor loop for consuming and dispatching requests:
+
+**Files Modified:**
+- `lib/sidekiq/async_http/processor.rb` - Added reactor loop implementation
+- `spec/sidekiq/async_http/processor_spec.rb` - Added 9 new reactor loop tests
+
+**Implementation Details:**
+
+1. **Reactor Loop Structure (`#run_reactor` enhanced):**
+   - Runs inside `Async do |task|` block for fiber-based concurrency
+   - Logs "Async HTTP Processor started" on initialization
+   - Main loop:
+     - Checks `stopping?` state and `@shutdown_barrier.set?` for clean exit
+     - Dequeues requests with 0.1s timeout (allows periodic shutdown checks)
+     - Verifies state again after dequeue (prevent processing during shutdown)
+     - Checks max connections limit before spawning fibers
+     - Applies backpressure when at capacity
+     - Spawns new fiber via `task.async` for each request
+   - Logs "Async HTTP Processor stopped" on exit
+   - Catches `Async::Stop` for normal shutdown
+   - Logs reactor loop errors without crashing
+
+2. **Backpressure Integration:**
+   - Checks `@metrics.in_flight_count >= @config.max_connections` before processing
+   - Logs debug message: "Max connections reached, applying backpressure"
+   - Calls `@connection_pool.check_capacity!(request)`:
+     - If raises `BackpressureError`: logs warning and continues loop
+     - Message: "Request dropped by backpressure: #{e.message}"
+     - Request is not processed (skipped via `next`)
+   - Ensures system stability under load
+
+3. **Fiber Spawning:**
+   - Each request processed in separate fiber: `task.async do ... end`
+   - Enables concurrent HTTP requests within single thread
+   - Fiber calls `process_request(request)` (placeholder for step 6.3)
+   - Per-fiber error handling:
+     - Catches all exceptions within fiber
+     - Logs error message and backtrace
+     - Does not crash reactor or other fibers
+
+4. **Timeout Management:**
+   - `dequeue_request(timeout: 0.1)` uses `Timeout.timeout`
+   - Returns `nil` on timeout
+   - Allows loop to check shutdown conditions every 0.1 seconds
+   - Prevents blocking indefinitely on empty queue
+
+5. **State-Aware Processing:**
+   - Double-checks state after dequeue (before processing)
+   - Exits loop immediately if `stopping?`
+   - Respects `draining?` state (set in step 6.1)
+   - Clean shutdown without orphaned requests
+
+6. **Logging Integration:**
+   - Uses `@config.effective_logger` throughout
+   - Log levels:
+     - `info`: Start/stop messages
+     - `debug`: Backpressure detection, stop signal
+     - `warn`: Dropped requests
+     - `error`: Exceptions and backtraces
+   - All logging is nil-safe with `&.`
+
+7. **Error Resilience:**
+   - Reactor loop errors caught at top level (outer rescue)
+   - Per-fiber errors caught within fiber (inner rescue)
+   - State automatically set to `:stopped` in ensure block (from step 6.1)
+   - System continues operating despite individual request failures
+
+8. **Test Coverage (9 new tests):**
+   - ✅ Consumes requests from queue
+   - ✅ Spawns new fibers for each request
+   - ✅ Logs reactor start and stop messages
+   - ✅ Breaks loop when stopping
+   - ✅ Handles Async::Stop gracefully
+   - ✅ Checks capacity before spawning fibers when at limit
+   - ✅ Logs debug message when max connections reached
+   - ✅ Checks max connections before spawning fibers
+   - ✅ Duplicate test for max connections verification
+   - Overall suite: 289 examples, 93.35% line coverage, 70.59% branch coverage
+
+9. **Integration Points:**
+   - **Metrics**: Reads `in_flight_count` for capacity decisions
+   - **ConnectionPool**: Calls `check_capacity!` for backpressure
+   - **Configuration**: Uses `max_connections`, `effective_logger`
+   - **Process Request**: Placeholder method ready for step 6.3
+
+**Flow Diagram:**
+```
+Reactor Loop
+    ↓
+Start Async block
+    ↓
+Loop:
+    ├─ Check stopping? → Break if true
+    ├─ Dequeue request (0.1s timeout)
+    ├─ Check stopping? → Break if true
+    ├─ Check in_flight_count >= max_connections?
+    │     ├─ Yes → check_capacity!(request)
+    │     │         ├─ Success → Continue
+    │     │         └─ BackpressureError → Log warn, skip request
+    │     └─ No → Continue
+    ├─ Spawn fiber: task.async { process_request(request) }
+    └─ Repeat
+    ↓
+Clean exit (Async::Stop or stopping?)
+```
+
+**Key Features:**
+- **Non-blocking**: Timeout on dequeue allows responsive shutdown
+- **Concurrent**: Multiple requests processed in parallel via fibers
+- **Resilient**: Errors don't crash reactor or other requests
+- **Backpressure-aware**: Respects connection limits
+- **Observable**: Comprehensive logging at all levels
+
+The reactor loop is now fully functional and ready for step 6.3 - implementing the actual HTTP execution logic in `process_request`!
+
+---
+
+## Phase 6: Processor Core - Item 6.1 ✅ COMPLETED
+
+**Date Completed:** January 13, 2026
+
+### 6.1 Implement Processor class basic structure ✅
+
+Created `Sidekiq::AsyncHttp::Processor` class with state management and threading infrastructure:
+
+**Files Created:**
+- `lib/sidekiq/async_http/processor.rb` - Processor class with state management
+- `spec/sidekiq/async_http/processor_spec.rb` - Comprehensive test suite (43 examples)
+
+**Implementation Details:**
+
+1. **Initialization:**
+   - Accepts optional `config`, `metrics`, and `connection_pool` (creates defaults if not provided)
+   - Instance variables:
+     - `@queue = Thread::Queue.new` - Thread-safe queue for requests
+     - `@metrics` - Metrics instance for tracking
+     - `@config` - Configuration object
+     - `@connection_pool` - Connection pool for HTTP clients
+     - `@state = Concurrent::AtomicReference.new(:stopped)` - Thread-safe state management
+     - `@reactor_thread = nil` - Background thread for async reactor
+     - `@shutdown_barrier = Concurrent::Event.new` - Synchronization primitive for shutdown
+
+2. **State Management:**
+   - **STATES constant:** `%i[stopped running draining stopping]`
+   - **State predicates:** `#running?`, `#stopped?`, `#draining?`, `#stopping?`
+   - **State accessor:** `#state` returns current state symbol
+   - Uses `Concurrent::AtomicReference` for thread-safe state transitions
+
+3. **Lifecycle Methods:**
+   - **`#start`:**
+     - Returns early if already running
+     - Sets state to `:running`
+     - Resets shutdown barrier
+     - Spawns reactor thread named "async-http-processor"
+     - Thread runs `#run_reactor` method
+     - Catches and logs errors to prevent crashes
+
+   - **`#stop(timeout: nil)`:**
+     - Returns early if already stopped
+     - Sets state to `:stopping`
+     - Waits for in-flight requests up to timeout (if provided)
+     - Signals shutdown barrier
+     - Joins reactor thread (max 5 seconds)
+     - Closes all connections via `connection_pool.close_all`
+     - Sets state to `:stopped`
+
+   - **`#drain`:**
+     - Sets state to `:draining` if currently running
+     - Stops accepting new requests (validated in `#enqueue`)
+
+4. **Request Management:**
+   - **`#enqueue(request)`:**
+     - Validates processor is `running?` or `draining?`
+     - Raises `RuntimeError` if in `stopped` or `stopping` state
+     - Pushes request to thread-safe `@queue`
+
+   - **`#dequeue_request(timeout:)` (private):**
+     - Wraps `@queue.pop` with timeout
+     - Returns `nil` on timeout
+     - Enables reactor loop to check shutdown conditions
+
+5. **Reactor Loop (`#run_reactor` - private):**
+   - Runs inside `Async` block for fiber-based concurrency
+   - Loop structure:
+     - Checks for `stopping?` state or shutdown barrier
+     - Dequeues request with 0.1s timeout
+     - Spawns new fiber via `task.async` for each request
+     - Calls `#process_request` (placeholder for step 6.3)
+     - Catches and logs errors per request
+   - Handles `Async::Stop` for normal shutdown
+   - Logs reactor loop errors
+
+6. **Error Handling:**
+   - Reactor thread catches all errors and logs via `config.effective_logger`
+   - Ensures state transitions to `:stopped` in ensure block
+   - Per-request errors logged without crashing reactor
+   - Graceful degradation on errors
+
+7. **Thread Safety:**
+   - Uses `Thread::Queue` for thread-safe request queuing
+   - Uses `Concurrent::AtomicReference` for state management
+   - Uses `Concurrent::Event` for shutdown synchronization
+   - Tested with concurrent enqueues and state reads
+
+8. **Test Coverage:**
+   - 43 examples, 0 failures
+   - Tests for:
+     - Initialization with defaults and custom objects
+     - State transitions (stopped → running → draining → stopping → stopped)
+     - State predicates
+     - Start/stop/drain lifecycle
+     - Request enqueueing in different states
+     - Timeout handling in stop
+     - Thread safety (concurrent enqueues and state reads)
+     - Error handling and recovery
+   - Overall suite: 280 examples, 93.24% line coverage, 71.96% branch coverage
+
+9. **Integration:**
+   - Added to autoload list in `lib/sidekiq/async_http.rb`
+   - Integrates with Configuration, Metrics, and ConnectionPool
+   - Ready for step 6.2 (reactor loop implementation)
+
+**Example Usage:**
+```ruby
+# Create processor with default config
+processor = Sidekiq::AsyncHttp::Processor.new
+
+# Start the background reactor
+processor.start
+processor.running? # => true
+
+# Enqueue requests
+processor.enqueue(request)
+
+# Drain (stop accepting new requests)
+processor.drain
+processor.draining? # => true
+
+# Stop with timeout for graceful shutdown
+processor.stop(timeout: 10)
+processor.stopped? # => true
+
+# Restart is supported
+processor.start
+```
+
+**State Transition Diagram:**
+```
+stopped → start() → running → drain() → draining → stop() → stopped
+                       ↓                                        ↑
+                    stop() ──────────────────────────────────→
+```
+---
+
+### Step 6.3: Implement HTTP execution fiber ✅ COMPLETED
+
+**Date Completed:** January 9, 2026
+
+Implemented `#process_request` method with full HTTP execution logic:
+
+1. **Fiber-Local Storage:**
+   - Sets `Fiber[:current_request] = request` for context tracking
+   - Cleaned up in `ensure` block after request completion
+   - Enables fiber-level request introspection
+
+2. **Metrics Integration:**
+   - Records `metrics.record_request_start(request)` before execution
+   - Records `metrics.record_request_complete(request, duration)` on success
+   - Records `metrics.record_error(request, error_type)` on failure
+   - Calculates duration with `Time.now` timestamps
+
+3. **Connection Pool Usage:**
+   - Uses `connection_pool.with_client(request.url)` block
+   - Yields `Async::HTTP::Client` instance
+   - Automatically manages connection lifecycle
+
+4. **HTTP Request Construction:**
+   - Added `#build_http_request(request)` helper method
+   - Constructs `Async::HTTP::Protocol::Request` with proper parameter order:
+     - `scheme` (http/https from URL)
+     - `authority` (host:port from URL)
+     - `method` (uppercased HTTP method)
+     - `path` (request URI path)
+     - `version` (nil for auto-detection)
+     - `headers` (hash of HTTP headers)
+     - `body` (array with body string, or nil)
+   - Parses URL with `URI.parse`
+
+5. **Timeout Handling:**
+   - Wraps execution in `Async::Task.current.with_timeout(timeout)`
+   - Uses `request.timeout || config.default_request_timeout`
+   - Raises `Async::TimeoutError` on timeout
+
+6. **Response Handling:**
+   - Calls `client.call(http_request)` to execute request
+   - Reads response body with `async_response.read`
+   - Builds response hash with:
+     - `status`: HTTP status code
+     - `headers`: Response headers as hash
+     - `body`: Response body string
+     - `protocol`: HTTP protocol version (HTTP/1.1, HTTP/2, etc.)
+     - `request_id`: Original request ID for correlation
+     - `url`: Original request URL
+     - `method`: Original HTTP method
+     - `duration`: Execution time in seconds
+
+7. **Error Classification:**
+   - Added `#classify_error(exception)` helper method
+   - Pattern matching for error types:
+     - `Async::TimeoutError` → `:timeout`
+     - `OpenSSL::SSL::SSLError` → `:ssl`
+     - `Errno::ECONNREFUSED`, `Errno::ECONNRESET`, `Errno::EHOSTUNREACH`, `Errno::ENETUNREACH` → `:connection`
+     - Everything else → `:unknown`
+
+8. **Success/Error Callbacks:**
+   - Added `#handle_success(request, response)` placeholder (for step 6.4)
+   - Added `#handle_error(request, exception)` placeholder (for step 6.5)
+   - Both are called appropriately based on execution outcome
+
+9. **Test Coverage:**
+   - Added 17 new tests for HTTP execution:
+     - Fiber-local storage (set and cleanup)
+     - Metrics recording (start, complete, error)
+     - HTTP request construction (Protocol::Request with correct params)
+     - Response body reading
+     - Response building with all attributes
+     - Success callback invocation
+     - Error handling (timeout, SSL, connection, unknown)
+     - Error classification
+     - Connection pool usage
+     - Request with body
+   - All tests run in `Async` reactor context
+   - Overall suite: 305 examples, 0 failures, 93.99% line coverage, 72.44% branch coverage
+
+10. **Dependencies:**
+    - Added `require "async/http"` for HTTP client classes
+    - Uses `Async::HTTP::Protocol::Request` and `Async::HTTP::Protocol::Response`
+    - Integrates with `ConnectionPool#with_client`
+    - Integrates with `Metrics#record_*` methods
+
+**Example Flow:**
+```ruby
+def process_request(request)
+  Fiber[:current_request] = request
+  start_time = Time.now
+  metrics.record_request_start(request)
+
+  connection_pool.with_client(request.url) do |client|
+    http_request = build_http_request(request)
+
+    response_data = Async::Task.current.with_timeout(timeout) do
+      async_response = client.call(http_request)
+      body = async_response.read
+      {status: async_response.status, headers: async_response.headers.to_h, ...}
+    end
+
+    duration = Time.now - start_time
+    response = build_response(request, response_data, duration)
+    metrics.record_request_complete(request, duration)
+    handle_success(request, response)
+  end
+rescue => e
+  metrics.record_error(request, classify_error(e))
+  handle_error(request, e)
+ensure
+  Fiber[:current_request] = nil
+end
+```
+
+**Next Steps:**
+Ready to proceed with **Step 6.4**: Implement success handling (enqueue success worker)
+---
+
+### Step 6.4: Implement success callback ✅ COMPLETED
+
+**Date Completed:** January 10, 2026
+
+Implemented `#handle_success` method to enqueue success worker when HTTP request completes successfully:
+
+1. **Worker Class Resolution:**
+   - Added `#resolve_worker_class(class_name)` helper method
+   - Uses `Object.const_get` to resolve class from string name
+   - Properly handles module namespaces (e.g., `MyApp::Workers::SuccessWorker`)
+   - Raises `NameError` if class cannot be found
+
+2. **Success Worker Enqueue:**
+   - Calls `worker_class.perform_async(response, *request.job_args)`
+   - Passes response hash as first argument
+   - Unpacks original job arguments after response
+   - Uses Sidekiq's standard `perform_async` method
+
+3. **Response Serialization:**
+   - Response hash contains all metadata:
+     - `status`: HTTP status code
+     - `headers`: Response headers hash
+     - `body`: Response body string
+     - `protocol`: HTTP protocol version
+     - `request_id`: Original request ID
+     - `url`: Request URL
+     - `method`: HTTP method
+     - `duration`: Execution time in seconds
+
+4. **Debug Logging:**
+   - Logs success at debug level via `config.effective_logger`
+   - Includes request ID, status code, and worker class name
+   - Format: `"Request req-123 succeeded with status 200, enqueued TestSuccessWorker"`
+
+5. **Error Handling:**
+   - Wraps enqueue in rescue block
+   - Catches any errors during worker enqueue (e.g., Sidekiq connection issues)
+   - Logs errors at error level but doesn't crash processor
+   - Allows processor to continue handling other requests
+
+6. **Test Coverage:**
+   - Added 5 comprehensive tests for success handling:
+     - Worker class resolution from string name
+     - Success worker enqueue with correct arguments
+     - Debug logging verification
+     - Error handling during enqueue
+     - Namespaced worker class support
+   - Overall suite: 310 examples, 0 failures, 94.05% line coverage, 72.09% branch coverage
+
+**Example Usage:**
+When an HTTP request completes successfully, the success worker is enqueued:
+```ruby
+# Request completes with 200 OK
+# Success worker receives response hash + original args
+class WebhookSuccessWorker
+  include Sidekiq::Job
+  
+  def perform(response, webhook_id, payload)
+    webhook = Webhook.find(webhook_id)
+    webhook.update!(delivered_at: Time.current, status: "success")
+  end
+end
+```
+
+**Next Steps:**
+Ready to proceed with **Step 6.5**: Implement error handling (enqueue error worker)
