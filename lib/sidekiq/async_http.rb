@@ -10,18 +10,15 @@ module Sidekiq::AsyncHttp
   VERSION = File.read(File.join(__dir__, "../../VERSION")).strip
 
   # Autoload all components
-  autoload :Request, "sidekiq/async_http/async_request"
-  autoload :HttpRequest, "sidekiq/async_http/http_request"
+  autoload :Configuration, "sidekiq/async_http/configuration"
+  autoload :Client, "sidekiq/async_http/client"
+  autoload :ConnectionPool, "sidekiq/async_http/connection_pool"
+  autoload :Error, "sidekiq/async_http/error"
   autoload :HttpHeaders, "sidekiq/async_http/http_headers"
+  autoload :Metrics, "sidekiq/async_http/metrics"
+  autoload :Processor, "sidekiq/async_http/processor"
   autoload :Request, "sidekiq/async_http/request"
   autoload :Response, "sidekiq/async_http/response"
-  autoload :Error, "sidekiq/async_http/error"
-  autoload :Configuration, "sidekiq/async_http/configuration"
-  autoload :Builder, "sidekiq/async_http/configuration"
-  autoload :Metrics, "sidekiq/async_http/metrics"
-  autoload :ConnectionPool, "sidekiq/async_http/connection_pool"
-  autoload :Processor, "sidekiq/async_http/processor"
-  autoload :Client, "sidekiq/async_http/client"
 
   @processor = nil
   @metrics = nil

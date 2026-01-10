@@ -871,7 +871,7 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
 ```
 [ ] 7.1 Implement Client module methods on Sidekiq::AsyncHttp:
         - Implement .request(**options):
-          - Validate required options: url, success_worker, error_worker
+          - Validate required options: url, success_worker, sidekiq_job
           - Build Request object with:
             - method: options[:method] || :get
             - url: options[:url]
@@ -896,8 +896,6 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
         - .put(url, **options) → .request(method: :put, url:, **options)
         - .patch(url, **options) → .request(method: :patch, url:, **options)
         - .delete(url, **options) → .request(method: :delete, url:, **options)
-        - .head(url, **options) → .request(method: :head, url:, **options)
-        - .options(url, **options) → .request(method: :options, url:, **options)
         - Write specs for each method
 
 [ ] 7.3 Implement accessor methods:
@@ -1195,6 +1193,17 @@ metrics = Sidekiq::AsyncHttp.metrics.to_h
 ```
 
 ---
+
+## Quality check
+
+- [ ] Code follows Ruby style guide (standardrb)
+- [ ] Comprehensive RSpec test coverage
+- [ ] Documentation complete and clear
+- [ ] Examples tested and verified
+- [ ] Threading code is as efficient as possible
+- [ ] Tests don't contain unnecessary sleeps
+- [ ] Tests don't contain unnecessary doubles/mocks
+- [ ] Graceful shutdown works correctly
 
 ## Future Enhancements
 
