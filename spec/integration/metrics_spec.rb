@@ -24,22 +24,19 @@ RSpec.describe "Metrics Integration", :integration do
     TestWorkers::SuccessWorker.reset_calls!
     TestWorkers::ErrorWorker.reset_calls!
 
-    @test_server = nil
-
     # Disable WebMock completely for integration tests
     WebMock.reset!
     WebMock.allow_net_connect!
     WebMock.disable!
 
     Sidekiq::Testing.fake!
+
+    processor.start
   end
 
   after do
     # Stop processor with minimal timeout
     processor.stop(timeout: 0) if processor.running?
-
-    # Clean up test server
-    cleanup_server(@test_server) if @test_server
 
     # Re-enable WebMock
     WebMock.enable!
@@ -48,28 +45,6 @@ RSpec.describe "Metrics Integration", :integration do
 
   describe "metrics tracking" do
     it "correctly tracks successful requests, errors, and request counts" do
-      # Start test HTTP server
-      request_count = 0
-      @test_server = with_test_server do |s|
-        s.on_request do |request|
-          request_count += 1
-          current_request = request_count
-
-          # Small delay for all requests
-          sleep(0.05)
-
-          {
-            status: 200,
-            body: %{{"result":"request_#{current_request}"}},
-            headers: {"Content-Type" => "application/json"}
-          }
-        end
-      end
-
-      # Start processor
-      processor.start
-      expect(processor.running?).to be true
-
       # Verify initial metrics state
       metrics = processor.metrics
       expect(metrics.total_requests).to eq(0)
@@ -77,13 +52,13 @@ RSpec.describe "Metrics Integration", :integration do
       expect(metrics.in_flight_count).to eq(0)
 
       # Build clients
-      client = Sidekiq::AsyncHttp::Client.new(base_url: @test_server.url)
+      client = Sidekiq::AsyncHttp::Client.new(base_url: test_web_server.base_url)
       # Client pointing to non-existent server for connection errors
       error_client = Sidekiq::AsyncHttp::Client.new(base_url: "http://localhost:1")
 
       # 10 successful requests
       10.times do |i|
-        request = client.async_get("/success-#{i + 1}")
+        request = client.async_get("/test/200")
 
         sidekiq_job = {
           "class" => "TestWorkers::Worker",
@@ -121,11 +96,7 @@ RSpec.describe "Metrics Integration", :integration do
         processor.enqueue(request_task)
       end
 
-      # Wait for all requests to complete
-      # Successful requests: 50ms each
-      # Error requests: should fail quickly (connection refused)
-      # Wait for all requests to process
-      sleep(2)
+      processor.wait_for_idle
 
       # Process enqueued Sidekiq jobs
       Sidekiq::Worker.drain_all
@@ -136,7 +107,7 @@ RSpec.describe "Metrics Integration", :integration do
 
       # Verify error types
       TestWorkers::ErrorWorker.calls.each do |call|
-        error, *args = call
+        error, *_ = call
         expect(error).to be_a(Sidekiq::AsyncHttp::Error)
         expect(error.error_type).to eq(:connection)
       end

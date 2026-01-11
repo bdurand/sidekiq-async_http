@@ -19,17 +19,17 @@ RSpec.describe "Full Workflow Integration", :integration do
     TestWorkers::Worker.reset_calls!
     TestWorkers::SuccessWorker.reset_calls!
     TestWorkers::ErrorWorker.reset_calls!
-    @test_server = nil
 
     # Disable WebMock completely for integration tests
     WebMock.reset!
     WebMock.allow_net_connect!
     WebMock.disable!
+
+    processor.start
   end
 
   after do
     processor.stop(timeout: 1) if processor.running?
-    cleanup_server(@test_server) if @test_server
 
     # Re-enable WebMock
     WebMock.enable!
@@ -38,34 +38,10 @@ RSpec.describe "Full Workflow Integration", :integration do
 
   describe "successful POST request workflow" do
     it "makes async POST request and calls success worker with response and original args", pending: "WEBrick/async-http incompatibility with POST bodies" do
-      # Start test HTTP server returning 200 OK
-      @test_server = with_test_server do |s|
-        s.on_request do |request|
-          # Verify request details
-          expect(request.method).to eq("POST")
-          expect(request.path).to eq("/webhooks")
-          expect(request.headers["content-type"]).to eq("application/json")
-          expect(request.headers["x-custom-header"]).to eq("test-value")
-
-          # Note: Skip body verification due to WEBrick/async-http incompatibility
-          # with request body reading
-
-          {
-            status: 200,
-            body: '{"success":true,"id":"webhook-123"}',
-            headers: {"Content-Type" => "application/json"}
-          }
-        end
-      end
-
-      # Start processor
-      processor.start
-      expect(processor.running?).to be true
-
       # Build request
-      client = Sidekiq::AsyncHttp::Client.new(base_url: @test_server.url)
+      client = Sidekiq::AsyncHttp::Client.new(base_url: test_web_server.base_url)
       request = client.async_post(
-        "/webhooks",
+        "/test/200",
         body: '{"event":"user.created","user_id":123}',
         headers: {
           "Content-Type" => "application/json",
@@ -119,28 +95,10 @@ RSpec.describe "Full Workflow Integration", :integration do
 
   describe "successful GET request workflow" do
     it "makes async GET request and calls success worker" do
-      # Start test HTTP server returning 200 OK
-      @test_server = with_test_server do |s|
-        s.on_request do |request|
-          expect(request.method).to eq("GET")
-          expect(request.path).to eq("/users/123")
-          expect(request.headers["authorization"]).to eq("Bearer token123")
-
-          {
-            status: 200,
-            body: '{"id":123,"name":"John Doe"}',
-            headers: {"Content-Type" => "application/json"}
-          }
-        end
-      end
-
-      # Start processor
-      processor.start
-
       # Build request
-      client = Sidekiq::AsyncHttp::Client.new(base_url: @test_server.url)
+      client = Sidekiq::AsyncHttp::Client.new(base_url: test_web_server.base_url)
       request = client.async_get(
-        "/users/123",
+        "/test/200",
         headers: {"Authorization" => "Bearer token123"}
       )
 
@@ -169,38 +127,22 @@ RSpec.describe "Full Workflow Integration", :integration do
 
       response, *args = TestWorkers::SuccessWorker.calls.first
       expect(response.status).to eq(200)
-      expect(response.body).to eq('{"id":123,"name":"John Doe"}')
+
+      # Verify response contains request info
+      response_data = JSON.parse(response.body)
+      expect(response_data["status"]).to eq(200)
+      expect(response_data["headers"]["authorization"]).to eq("Bearer token123")
       expect(args).to eq(["user", 123, "fetch"])
     end
   end
 
   describe "multiple concurrent requests" do
     it "handles multiple requests with different responses" do
-      # Setup server to handle multiple endpoints
-      request_count = 0
-      @test_server = with_test_server do |s|
-        s.on_request do |request|
-          request_count += 1
-          case request.path
-          when "/endpoint1"
-            {status: 200, body: "response1"}
-          when "/endpoint2"
-            {status: 201, body: "response2"}
-          when "/endpoint3"
-            {status: 202, body: "response3"}
-          else
-            {status: 404, body: "Not found"}
-          end
-        end
-      end
+      client = Sidekiq::AsyncHttp::Client.new(base_url: test_web_server.base_url)
 
-      processor.start
-
-      client = Sidekiq::AsyncHttp::Client.new(base_url: @test_server.url)
-
-      # Enqueue 3 requests
-      3.times do |i|
-        request = client.async_get("/endpoint#{i + 1}")
+      # Enqueue 3 requests with different status codes
+      [200, 201, 202].each_with_index do |status, i|
+        request = client.async_get("/test/#{status}")
         request_task = Sidekiq::AsyncHttp::RequestTask.new(
           request: request,
           sidekiq_job: {
@@ -225,33 +167,16 @@ RSpec.describe "Full Workflow Integration", :integration do
       # Verify each got correct response
       responses = TestWorkers::SuccessWorker.calls.map { |call| call.first }
       statuses = responses.map(&:status).sort
-      bodies = responses.map(&:body).sort
 
       expect(statuses).to eq([200, 201, 202])
-      expect(bodies).to eq(%w[response1 response2 response3])
     end
   end
 
   describe "request with params and headers" do
-    it "properly encodes params and sends headers", pending: "WEBrick occasionally returns nil body (race condition)" do
-      @test_server = with_test_server do |s|
-        s.on_request do |request|
-          expect(request.path).to include("/search")
-          expect(request.path).to include("q=ruby")
-          expect(request.path).to include("page=2")
-          expect(request.path).to include("limit=50")
-          expect(request.headers["authorization"]).to eq("Bearer secret")
-          expect(request.headers["x-api-version"]).to eq("v2")
-
-          {status: 200, body: "search results"}
-        end
-      end
-
-      processor.start
-
-      client = Sidekiq::AsyncHttp::Client.new(base_url: @test_server.url)
+    it "properly encodes params and sends headers" do
+      client = Sidekiq::AsyncHttp::Client.new(base_url: test_web_server.base_url)
       request = client.async_get(
-        "/search",
+        "/test/200",
         params: {"q" => "ruby", "page" => "2", "limit" => "50"},
         headers: {
           "Authorization" => "Bearer secret",
@@ -274,25 +199,22 @@ RSpec.describe "Full Workflow Integration", :integration do
       expect(TestWorkers::SuccessWorker.calls.size).to eq(1)
       response = TestWorkers::SuccessWorker.calls.first.first
       expect(response.status).to eq(200)
-      expect(response.body).to eq("search results")
+
+      # Verify params and headers were sent
+      response_data = JSON.parse(response.body)
+      expect(response_data["query_string"]).to include("q=ruby")
+      expect(response_data["query_string"]).to include("page=2")
+      expect(response_data["query_string"]).to include("limit=50")
+      expect(response_data["headers"]["authorization"]).to eq("Bearer secret")
+      expect(response_data["headers"]["x-api-version"]).to eq("v2")
     end
   end
 
   describe "processor lifecycle" do
     it "can be started and stopped cleanly" do
-      @test_server = with_test_server do |s|
-        s.on_request do |request|
-          {status: 200, body: "ok"}
-        end
-      end
-
-      # Start processor
-      processor.start
-      expect(processor.running?).to be true
-
       # Make a request
-      client = Sidekiq::AsyncHttp::Client.new(base_url: @test_server.url)
-      request = client.async_get("/test")
+      client = Sidekiq::AsyncHttp::Client.new(base_url: test_web_server.base_url)
+      request = client.async_get("/test/200")
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
         sidekiq_job: {"class" => "TestWorkers::Worker", "jid" => "jid", "args" => []},

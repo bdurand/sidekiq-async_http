@@ -126,7 +126,7 @@ Created `Sidekiq::AsyncHttp::RequestBuilder` class with fluent builder pattern:
    - `params` - Query parameters hash
    - `body` - Request body
    - `timeout` - Total timeout
-   - `open_timeout` - Connection open timeout
+   - `connect_timeout` - Connection open timeout
    - `read_timeout` - Read timeout
    - `write_timeout` - Write timeout
 
@@ -139,7 +139,7 @@ Created `Sidekiq::AsyncHttp::RequestBuilder` class with fluent builder pattern:
    - `request_param(key, value)` - Add/update single param (merges)
    - `request_body(value)` - Set request body
    - `request_timeout(value)` - Set total timeout
-   - `set_open_timeout(value)` - Set open timeout
+   - `set_connect_timeout(value)` - Set open timeout
    - `set_read_timeout(value)` - Set read timeout
    - `set_write_timeout(value)` - Set write timeout
    - `request()` - Build final immutable Data object
@@ -199,7 +199,7 @@ Created `Sidekiq::AsyncHttp::RequestBuilder` class with fluent builder pattern:
    - `params` - Query parameters hash
    - `body` - Request body
    - `timeout` - Total timeout
-   - `open_timeout` - Connection open timeout
+   - `connect_timeout` - Connection open timeout
    - `read_timeout` - Read timeout
    - `write_timeout` - Write timeout
 
@@ -212,7 +212,7 @@ Created `Sidekiq::AsyncHttp::RequestBuilder` class with fluent builder pattern:
    - `request_param(key, value)` - Add/update single param (merges)
    - `request_body(value)` - Set request body
    - `request_timeout(value)` - Set total timeout
-   - `set_open_timeout(value)` - Set open timeout
+   - `set_connect_timeout(value)` - Set open timeout
    - `set_read_timeout(value)` - Set read timeout
    - `set_write_timeout(value)` - Set write timeout
    - `request()` - Build final immutable Data object

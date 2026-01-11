@@ -34,6 +34,11 @@ Dir.glob(File.join(__dir__, "support", "**", "*.rb")).sort.each do |file|
   require file
 end
 
+$test_web_server = nil # rubocop:disable Style/GlobalVars
+def test_web_server
+  $test_web_server ||= TestWebServer.new # rubocop:disable Style/GlobalVars
+end
+
 RSpec.configure do |config|
   config.disable_monkey_patching!
   config.default_formatter = "doc" if config.files_to_run.one?
@@ -51,11 +56,11 @@ RSpec.configure do |config|
     Sidekiq::AsyncHttp.reset! if Sidekiq::AsyncHttp.running?
   end
 
-  config.around do |example|
-    start_time = Time.now
-    example.run
-    if Time.now - start_time > 1
-      puts "WARNING: Example #{example.full_description} took more than 1 second to run."
-    end
+  config.before(:each, :integration) do
+    test_web_server.start.ready?
+  end
+
+  config.after(:suite) do
+    test_web_server.stop
   end
 end

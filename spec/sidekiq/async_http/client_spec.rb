@@ -28,9 +28,9 @@ RSpec.describe Sidekiq::AsyncHttp::Client do
       expect(client.timeout).to eq(60)
     end
 
-    it "allows custom open_timeout" do
-      client = described_class.new(open_timeout: 10)
-      expect(client.open_timeout).to eq(10)
+    it "allows custom connect_timeout" do
+      client = described_class.new(connect_timeout: 10)
+      expect(client.connect_timeout).to eq(10)
     end
 
     it "allows custom read_timeout" do
@@ -335,10 +335,10 @@ RSpec.describe Sidekiq::AsyncHttp::Client do
       expect(client.timeout).to eq(45)
     end
 
-    it "allows setting and getting open_timeout" do
+    it "allows setting and getting connect_timeout" do
       client = described_class.new
-      client.open_timeout = 5
-      expect(client.open_timeout).to eq(5)
+      client.connect_timeout = 5
+      expect(client.connect_timeout).to eq(5)
     end
 
     it "allows setting and getting read_timeout" do

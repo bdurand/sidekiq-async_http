@@ -11,13 +11,13 @@ module Sidekiq::AsyncHttp
   # The Client handles building HTTP requests with proper URL joining, header merging,
   # and parameter encoding. Call perform() on the returned Request to execute it asynchronously.
   class Client
-    attr_accessor :base_url, :headers, :timeout, :open_timeout, :read_timeout, :write_timeout
+    attr_accessor :base_url, :headers, :timeout, :connect_timeout, :read_timeout, :write_timeout
 
-    def initialize(base_url: nil, headers: {}, timeout: 30, open_timeout: nil, read_timeout: nil, write_timeout: nil)
+    def initialize(base_url: nil, headers: {}, timeout: 30, connect_timeout: nil, read_timeout: nil, write_timeout: nil)
       @base_url = base_url
       @headers = HttpHeaders.new(headers)
       @timeout = timeout
-      @open_timeout = open_timeout
+      @connect_timeout = connect_timeout
       @read_timeout = read_timeout
       @write_timeout = write_timeout
     end

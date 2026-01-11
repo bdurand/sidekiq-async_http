@@ -3,19 +3,6 @@
 require "spec_helper"
 
 RSpec.describe Sidekiq::AsyncHttp::Request do
-  # Define test worker classes
-  class TestSuccessWorker
-    include Sidekiq::Job
-  end
-
-  class TestErrorWorker
-    include Sidekiq::Job
-  end
-
-  class ContextWorker
-    include Sidekiq::Job
-  end
-
   describe "#initialize" do
     it "creates a request with valid parameters" do
       request = described_class.new(
@@ -98,8 +85,8 @@ RSpec.describe Sidekiq::AsyncHttp::Request do
       it "returns the request ID" do
         result = request.perform(
           sidekiq_job: job_hash,
-          success_worker: TestSuccessWorker,
-          error_worker: TestErrorWorker
+          success_worker: TestWorkers::SuccessWorker,
+          error_worker: TestWorkers::ErrorWorker
         )
 
         expect(result).to eq(request.id)
@@ -111,14 +98,14 @@ RSpec.describe Sidekiq::AsyncHttp::Request do
           expect(task).to be_a(Sidekiq::AsyncHttp::RequestTask)
           expect(task.request).to eq(request)
           expect(task.sidekiq_job).to eq(job_hash)
-          expect(task.success_worker).to eq(TestSuccessWorker)
-          expect(task.error_worker).to eq(TestErrorWorker)
+          expect(task.success_worker).to eq(TestWorkers::SuccessWorker)
+          expect(task.error_worker).to eq(TestWorkers::ErrorWorker)
         end
 
         request.perform(
           sidekiq_job: job_hash,
-          success_worker: TestSuccessWorker,
-          error_worker: TestErrorWorker
+          success_worker: TestWorkers::SuccessWorker,
+          error_worker: TestWorkers::ErrorWorker
         )
       end
 
@@ -131,7 +118,7 @@ RSpec.describe Sidekiq::AsyncHttp::Request do
 
         request.perform(
           sidekiq_job: job_hash,
-          success_worker: TestSuccessWorker
+          success_worker: TestWorkers::SuccessWorker
         )
 
         expect(captured_task).not_to be_nil
@@ -146,7 +133,7 @@ RSpec.describe Sidekiq::AsyncHttp::Request do
 
         request.perform(
           sidekiq_job: job_hash,
-          success_worker: TestSuccessWorker,
+          success_worker: TestWorkers::SuccessWorker,
           error_worker: nil
         )
       end
@@ -161,7 +148,7 @@ RSpec.describe Sidekiq::AsyncHttp::Request do
         expect do
           request.perform(
             sidekiq_job: job_hash,
-            success_worker: TestSuccessWorker
+            success_worker: TestWorkers::SuccessWorker
           )
         end.to raise_error(Sidekiq::AsyncHttp::NotRunningError, /processor is not running/)
       end
@@ -172,7 +159,7 @@ RSpec.describe Sidekiq::AsyncHttp::Request do
         begin
           request.perform(
             sidekiq_job: job_hash,
-            success_worker: TestSuccessWorker
+            success_worker: TestWorkers::SuccessWorker
           )
         rescue Sidekiq::AsyncHttp::NotRunningError
           # Expected
@@ -199,22 +186,21 @@ RSpec.describe Sidekiq::AsyncHttp::Request do
 
       it "validates sidekiq_job is a Hash" do
         expect do
-          request.perform(sidekiq_job: "not a hash", success_worker: TestSuccessWorker)
+          request.perform(sidekiq_job: "not a hash", success_worker: TestWorkers::SuccessWorker)
         end.to raise_error(ArgumentError, "sidekiq_job must be a Hash, got: String")
       end
 
       it "validates sidekiq_job has 'class' key" do
         expect do
-          request.perform(sidekiq_job: {"args" => []}, success_worker: TestSuccessWorker)
+          request.perform(sidekiq_job: {"args" => []}, success_worker: TestWorkers::SuccessWorker)
         end.to raise_error(ArgumentError, "sidekiq_job must have 'class' key")
       end
 
       it "validates sidekiq_job has 'args' array" do
         expect do
-          request.perform(sidekiq_job: {"class" => "Worker"}, success_worker: TestSuccessWorker)
+          request.perform(sidekiq_job: {"class" => "Worker"}, success_worker: TestWorkers::SuccessWorker)
         end.to raise_error(ArgumentError, "sidekiq_job must have 'args' array")
       end
     end
   end
 end
-

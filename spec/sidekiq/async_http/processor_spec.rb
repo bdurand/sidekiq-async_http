@@ -377,7 +377,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       threads = 10.times.map do |i|
         Thread.new do
           10.times do |j|
-            request = create_request_task()
+            request = create_request_task
             processor.enqueue(request)
           end
         end
@@ -461,8 +461,8 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
 
       processor_with_config.start
 
-      request1 = create_request_task()
-      request2 = create_request_task()
+      request1 = create_request_task
+      request2 = create_request_task
 
       processor_with_config.enqueue(request1)
       processor_with_config.enqueue(request2)
@@ -482,7 +482,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       processor_with_config.start
 
       # Enqueue multiple requests
-      3.times { |i| processor_with_config.enqueue(create_request_task()) }
+      3.times { |i| processor_with_config.enqueue(create_request_task) }
 
       processor_with_config.wait_for_idle
 
@@ -494,7 +494,6 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       config_low_max = Sidekiq::AsyncHttp::Configuration.new(logger: logger, max_connections: 1)
       real_metrics = Sidekiq::AsyncHttp::Metrics.new
       processor_low_max = described_class.new(config_low_max, metrics: real_metrics)
-
 
       # Track when first request starts processing
       processing_started = Concurrent::Event.new
@@ -520,14 +519,14 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       processor_low_max.start
 
       # Enqueue first request - this will start processing
-      request1 = create_request_task()
+      request1 = create_request_task
       processor_low_max.enqueue(request1)
 
       # Wait for first request to start processing (in_flight will be 1)
       processing_started.wait(0.1)
 
       # Now enqueue second request - this should trigger backpressure check
-      request2 = create_request_task()
+      request2 = create_request_task
       processor_low_max.enqueue(request2)
 
       # Give reactor time to dequeue second request
@@ -588,7 +587,6 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       real_metrics = Sidekiq::AsyncHttp::Metrics.new
       processor_low_max = described_class.new(config_low_max, metrics: real_metrics)
 
-
       # Track when first request starts
       processing_started = Concurrent::Event.new
       request_count = Concurrent::AtomicFixnum.new(0)
@@ -613,14 +611,14 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       processor_low_max.start
 
       # Enqueue first request
-      request1 = create_request_task()
+      request1 = create_request_task
       processor_low_max.enqueue(request1)
 
       # Wait for first request to start
       processing_started.wait(0.1)
 
       # Enqueue second request
-      request2 = create_request_task()
+      request2 = create_request_task
       processor_low_max.enqueue(request2)
 
       # Give reactor time to dequeue second request
@@ -630,7 +628,6 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
 
       processor_low_max.stop
     end
-
   end
 
   describe "HTTP execution" do

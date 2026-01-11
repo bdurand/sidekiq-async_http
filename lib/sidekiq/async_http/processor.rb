@@ -132,25 +132,35 @@ module Sidekiq
       # Check if processor is running
       # @return [Boolean]
       def running?
-        @state.get == :running
+        state == :running
       end
 
       # Check if processor is stopped
       # @return [Boolean]
       def stopped?
-        @state.get == :stopped
+        state == :stopped
       end
 
       # Check if processor is draining
       # @return [Boolean]
       def draining?
-        @state.get == :draining
+        state == :draining
+      end
+
+      def drained?
+        state == :draining && idle?
       end
 
       # Check if processor is stopping
       # @return [Boolean]
       def stopping?
-        @state.get == :stopping
+        state == :stopping
+      end
+
+      def idle?
+        @tasks_lock.synchronize do
+          @queue.empty? && @pending_tasks.empty? && @in_flight_requests.empty?
+        end
       end
 
       # Get current state
@@ -166,8 +176,8 @@ module Sidekiq
       # @api private
       def wait_for_idle(timeout: 1)
         deadline = monotonic_time + timeout
-        while monotonic_time <= deadline do
-          return true if @queue.empty? && @metrics.in_flight_count == 0
+        while monotonic_time <= deadline
+          return true if idle?
           sleep(0.001)
         end
         false
@@ -179,7 +189,7 @@ module Sidekiq
       # @api private
       def wait_for_processing(timeout: 1)
         deadline = monotonic_time + timeout
-        while monotonic_time <= deadline do
+        while monotonic_time <= deadline
           return true if @metrics.in_flight_count > 0
           sleep(0.001)
         end

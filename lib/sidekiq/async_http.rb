@@ -63,9 +63,7 @@ module Sidekiq::AsyncHttp
     # Returns the processor instance (internal accessor)
     # @return [Processor, nil]
     # @api private
-    def processor
-      @processor
-    end
+    attr_reader :processor
 
     # Returns the metrics from the processor
     # @return [Metrics, nil]
@@ -80,17 +78,17 @@ module Sidekiq::AsyncHttp
     # @param body [String, nil] request body
     # @param json [Object, nil] JSON object to serialize as body
     # @param timeout [Float] request timeout in seconds
-    # @param open_timeout [Float, nil] connection open timeout in seconds
+    # @param connect_timeout [Float, nil] connection open timeout in seconds
     # @param read_timeout [Float, nil] read timeout in seconds
     # @param write_timeout [Float, nil] write timeout in seconds
     # @param sidekiq_job [Sidekiq::Job, nil] the Sidekiq job context for the current worker
     # @param success_worker [String] worker class name for success callback
     # @param error_worker [String] worker class name for error callback
     # @return [String] request ID
-    def request(method:, url:, headers: {}, body: nil, json: nil,
-      timeout: nil, open_timeout: nil, read_timeout: nil, write_timeout: nil,
-      sidekiq_job: nil, success_worker:, error_worker: nil)
-      client = Client.new(timeout: timeout, open_timeout: open_timeout, read_timeout: read_timeout, write_timeout: write_timeout)
+    def request(method:, url:, success_worker:, headers: {}, body: nil, json: nil,
+      timeout: nil, connect_timeout: nil, read_timeout: nil, write_timeout: nil,
+      sidekiq_job: nil, error_worker: nil)
+      client = Client.new(timeout: timeout, connect_timeout: connect_timeout, read_timeout: read_timeout, write_timeout: write_timeout)
       request = client.async_request(method, url, body: body, json: json, headers: headers)
       request.perform(sidekiq_job: sidekiq_job, success_worker_class: success_worker, error_worker_class: error_worker)
       request.id

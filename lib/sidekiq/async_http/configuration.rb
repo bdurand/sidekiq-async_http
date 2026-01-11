@@ -32,9 +32,7 @@ module Sidekiq
         @logger || Sidekiq.logger
       end
 
-      def logger=(value)
-        @logger = value
-      end
+      attr_writer :logger
 
       def max_connections=(value)
         validate_positive(:max_connections, value)

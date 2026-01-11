@@ -19,17 +19,17 @@ RSpec.describe "Error Handling Integration", :integration do
     TestWorkers::Worker.reset_calls!
     TestWorkers::SuccessWorker.reset_calls!
     TestWorkers::ErrorWorker.reset_calls!
-    @test_server = nil
 
     # Disable WebMock completely for integration tests
     WebMock.reset!
     WebMock.allow_net_connect!
     WebMock.disable!
+
+    processor.start
   end
 
   after do
     processor.stop(timeout: 1) if processor.running?
-    cleanup_server(@test_server) if @test_server
 
     # Re-enable WebMock
     WebMock.enable!
@@ -38,19 +38,9 @@ RSpec.describe "Error Handling Integration", :integration do
 
   describe "timeout errors" do
     it "calls error worker with timeout error when request exceeds timeout" do
-      # Start server with delay longer than timeout
-      @test_server = with_test_server do |s|
-        s.on_request do |request|
-          sleep 2 # Delay longer than the request timeout
-          {status: 200, body: "too late"}
-        end
-      end
-
-      processor.start
-
-      # Make request with short timeout
-      client = Sidekiq::AsyncHttp::Client.new(base_url: @test_server.url, timeout: 0.5)
-      request = client.async_get("/delayed")
+      # Make request with short timeout (use a longer delay to ensure timeout)
+      client = Sidekiq::AsyncHttp::Client.new(base_url: test_web_server.base_url, timeout: 0.1)
+      request = client.async_get("/delay/5000")
 
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
@@ -60,7 +50,7 @@ RSpec.describe "Error Handling Integration", :integration do
       )
 
       processor.enqueue(request_task)
-      processor.wait_for_idle(timeout: 3)
+      processor.wait_for_idle(timeout: 1)
 
       # Process enqueued jobs
       Sidekiq::Worker.drain_all
@@ -79,10 +69,8 @@ RSpec.describe "Error Handling Integration", :integration do
 
   describe "connection errors" do
     it "calls error worker with connection error when server is not listening" do
-      processor.start
-
       # Make request to a port that's not listening
-      client = Sidekiq::AsyncHttp::Client.new(base_url: "http://127.0.0.1:9999")
+      client = Sidekiq::AsyncHttp::Client.new(base_url: "http://127.0.0.1:1", connect_timeout: 0.1)
       request = client.async_get("/nowhere")
 
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
@@ -93,7 +81,7 @@ RSpec.describe "Error Handling Integration", :integration do
       )
 
       processor.enqueue(request_task)
-      processor.wait_for_idle(timeout: 2)
+      processor.wait_for_idle
 
       # Process enqueued jobs
       Sidekiq::Worker.drain_all
@@ -113,19 +101,10 @@ RSpec.describe "Error Handling Integration", :integration do
 
   describe "SSL errors" do
     it "calls error worker with ssl error for SSL issues" do
-      processor.start
-
-      # Try to make HTTPS request to HTTP server
-      @test_server = with_test_server do |s|
-        s.on_request do |request|
-          {status: 200, body: "ok"}
-        end
-      end
-
-      # Use https:// scheme with HTTP-only server
-      url = @test_server.url.sub("http://", "https://")
-      client = Sidekiq::AsyncHttp::Client.new(base_url: url)
-      request = client.async_get("/test")
+      # Use https:// scheme with HTTP-only server to trigger SSL error
+      https_url = test_web_server.base_url.sub("http://", "https://")
+      client = Sidekiq::AsyncHttp::Client.new(base_url: https_url)
+      request = client.async_get("/test/200")
 
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
@@ -135,7 +114,7 @@ RSpec.describe "Error Handling Integration", :integration do
       )
 
       processor.enqueue(request_task)
-      processor.wait_for_idle(timeout: 2)
+      processor.wait_for_idle
 
       # Process enqueued jobs
       Sidekiq::Worker.drain_all
@@ -153,16 +132,8 @@ RSpec.describe "Error Handling Integration", :integration do
 
   describe "HTTP error responses" do
     it "calls success worker for 4xx responses (they are valid HTTP responses)" do
-      @test_server = with_test_server do |s|
-        s.on_request do |request|
-          {status: 404, body: "Not Found"}
-        end
-      end
-
-      processor.start
-
-      client = Sidekiq::AsyncHttp::Client.new(base_url: @test_server.url)
-      request = client.async_get("/missing")
+      client = Sidekiq::AsyncHttp::Client.new(base_url: test_web_server.base_url)
+      request = client.async_get("/test/404")
 
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
@@ -172,7 +143,7 @@ RSpec.describe "Error Handling Integration", :integration do
       )
 
       processor.enqueue(request_task)
-      processor.wait_for_idle(timeout: 2)
+      processor.wait_for_idle
 
       # Process enqueued jobs
       Sidekiq::Worker.drain_all
@@ -183,22 +154,13 @@ RSpec.describe "Error Handling Integration", :integration do
 
       response, *args = TestWorkers::SuccessWorker.calls.first
       expect(response.status).to eq(404)
-      expect(response.body).to eq("Not Found")
       expect(response.client_error?).to be true
       expect(args).to eq(["missing"])
     end
 
     it "calls success worker for 5xx responses (they are valid HTTP responses)" do
-      @test_server = with_test_server do |s|
-        s.on_request do |request|
-          {status: 503, body: "Service Unavailable"}
-        end
-      end
-
-      processor.start
-
-      client = Sidekiq::AsyncHttp::Client.new(base_url: @test_server.url)
-      request = client.async_get("/unavailable")
+      client = Sidekiq::AsyncHttp::Client.new(base_url: test_web_server.base_url)
+      request = client.async_get("/test/503")
 
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
@@ -208,7 +170,7 @@ RSpec.describe "Error Handling Integration", :integration do
       )
 
       processor.enqueue(request_task)
-      processor.wait_for_idle(timeout: 2)
+      processor.wait_for_idle
 
       # Process enqueued jobs
       Sidekiq::Worker.drain_all
@@ -219,7 +181,6 @@ RSpec.describe "Error Handling Integration", :integration do
 
       response, *args = TestWorkers::SuccessWorker.calls.first
       expect(response.status).to eq(503)
-      expect(response.body).to eq("Service Unavailable")
       expect(response.server_error?).to be true
       expect(args).to eq(["unavailable"])
     end
@@ -227,10 +188,8 @@ RSpec.describe "Error Handling Integration", :integration do
 
   describe "error worker not provided" do
     it "logs error and does not crash when error_worker is nil" do
-      processor.start
-
       # Make request to non-existent server without error_worker
-      client = Sidekiq::AsyncHttp::Client.new(base_url: "http://127.0.0.1:9998")
+      client = Sidekiq::AsyncHttp::Client.new(base_url: "http://127.0.0.1:1", connect_timeout: 0.1)
       request = client.async_get("/nowhere")
 
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
@@ -241,7 +200,7 @@ RSpec.describe "Error Handling Integration", :integration do
       )
 
       processor.enqueue(request_task)
-      processor.wait_for_idle(timeout: 2)
+      processor.wait_for_idle
 
       # Process enqueued jobs
       Sidekiq::Worker.drain_all

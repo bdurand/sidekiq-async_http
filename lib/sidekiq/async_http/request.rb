@@ -14,9 +14,9 @@ module Sidekiq::AsyncHttp
     # Valid HTTP methods
     VALID_METHODS = %i[get post put patch delete].freeze
 
-    attr_reader :id, :method, :url, :headers, :body, :timeout, :read_timeout, :open_timeout, :write_timeout
+    attr_reader :id, :method, :url, :headers, :body, :timeout, :read_timeout, :connect_timeout, :write_timeout
 
-    def initialize(method:, url:, headers: {}, body: nil, timeout: nil, read_timeout: nil, open_timeout: nil, write_timeout: nil)
+    def initialize(method:, url:, headers: {}, body: nil, timeout: nil, read_timeout: nil, connect_timeout: nil, write_timeout: nil)
       @id = SecureRandom.uuid
       @method = method.is_a?(String) ? method.downcase.to_sym : method
       @url = url
@@ -24,7 +24,7 @@ module Sidekiq::AsyncHttp
       @body = body
       @timeout = timeout
       @read_timeout = read_timeout
-      @open_timeout = open_timeout
+      @connect_timeout = connect_timeout
       @write_timeout = write_timeout
       @job = nil
       @success_worker_class = nil
@@ -60,7 +60,7 @@ module Sidekiq::AsyncHttp
     # @param error_worker [Class, nil] Worker class (must include Sidekiq::Job) to call on error.
     #   If nil, errors will be logged and the original job will be retried.
     # @return [String] the request ID
-    def perform(sidekiq_job: nil, success_worker:, error_worker: nil)
+    def perform(success_worker:, sidekiq_job: nil, error_worker: nil)
       # Get current job if not provided
       @job = sidekiq_job || (defined?(Sidekiq::Context) ? Sidekiq::Context.current : nil)
 

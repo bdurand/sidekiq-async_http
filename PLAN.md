@@ -128,7 +128,7 @@ An immutable value object representing the HTTP request details:
 # - body: String or nil
 # - timeout: Float (seconds), default from configuration
 # - read_timeout: Float (seconds), optional
-# - open_timeout: Float (seconds), optional
+# - connect_timeout: Float (seconds), optional
 # - write_timeout: Float (seconds), optional
 ```
 
@@ -613,7 +613,7 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
 
 ```
 [x] 2.0 Define builder pattern object for building an HTTP request.
-        - Define builder object with attributes: http_method, url, headers, params, body, timeout, open_timeout, read_timeout, write_timeout
+        - Define builder object with attributes: http_method, url, headers, params, body, timeout, connect_timeout, read_timeout, write_timeout
         - Calling any of the attribute methods on the builder object creates a new builder object with that attribute set to the specified value and returns it.
         - Calling `header` or `param` will merge the value with the existing hash. Calling `headers` or `params` will replace the entire hash.
         - Calling `request` will return a Data object with all attributes set.

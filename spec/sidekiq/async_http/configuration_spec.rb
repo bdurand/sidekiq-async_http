@@ -122,7 +122,7 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
 
     context "with float values" do
       it "accepts positive floats for timeouts" do
-        config = described_class.new(
+        described_class.new(
           idle_connection_timeout: 30.5,
           default_request_timeout: 15.25,
           shutdown_timeout: 20.75

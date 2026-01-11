@@ -76,7 +76,6 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       expect(task.started_at).to be_nil
       expect(task.completed_at).to be_nil
     end
-
   end
 
   describe "#job_worker_class_name" do

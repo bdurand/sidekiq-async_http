@@ -43,9 +43,9 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
     end
 
     it "tracks multiple in-flight requests" do
-      request1 = create_request_task()
-      request2 = create_request_task()
-      request3 = create_request_task()
+      request1 = create_request_task
+      request2 = create_request_task
+      request3 = create_request_task
 
       metrics.record_request_start(request1)
       metrics.record_request_start(request2)
@@ -80,8 +80,8 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
     end
 
     it "calculates correct average with multiple requests" do
-      request2 = create_request_task()
-      request3 = create_request_task()
+      request2 = create_request_task
+      request3 = create_request_task
 
       metrics.record_request_start(request2)
       metrics.record_request_start(request3)
@@ -108,8 +108,8 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
     end
 
     it "increments existing error types" do
-      request2 = create_request_task()
-      request3 = create_request_task()
+      request2 = create_request_task
+      request3 = create_request_task
 
       metrics.record_error(request, :timeout)
       metrics.record_error(request2, :timeout)
@@ -123,7 +123,7 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
       error_types = %i[timeout connection ssl protocol unknown]
 
       error_types.each_with_index do |type, index|
-        req = create_request_task()
+        req = create_request_task
         metrics.record_error(req, type)
       end
 
@@ -140,8 +140,8 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
     end
 
     it "returns snapshot at time of call" do
-      request1 = create_request_task()
-      request2 = create_request_task()
+      request1 = create_request_task
+      request2 = create_request_task
 
       metrics.record_request_start(request1)
       snapshot = metrics.in_flight_requests
@@ -164,7 +164,7 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
       metrics.record_error(request, :timeout)
       snapshot = metrics.errors_by_type
 
-      request2 = create_request_task()
+      request2 = create_request_task
       metrics.record_error(request2, :connection)
 
       expect(snapshot).to eq({timeout: 1})
@@ -190,7 +190,7 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
 
     it "returns consistent snapshot" do
       10.times do |i|
-        req = create_request_task()
+        req = create_request_task
         metrics.record_request_start(req)
         metrics.record_request_complete(req, 1.0)
       end
@@ -235,7 +235,7 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
       num_threads.times do |i|
         threads << Thread.new do
           requests_per_thread.times do |j|
-            req = create_request_task()
+            req = create_request_task
             metrics.record_request_start(req)
             metrics.record_request_complete(req, rand(0.1..2.0))
           end
@@ -257,7 +257,7 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
       num_threads.times do |i|
         threads << Thread.new do
           errors_per_thread.times do |j|
-            req = create_request_task()
+            req = create_request_task
             error_type = error_types.sample
             metrics.record_error(req, error_type)
           end

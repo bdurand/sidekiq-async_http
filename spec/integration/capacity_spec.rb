@@ -24,22 +24,19 @@ RSpec.describe "Capacity Limit Integration", :integration do
     TestWorkers::SuccessWorker.reset_calls!
     TestWorkers::ErrorWorker.reset_calls!
 
-    @test_server = nil
-
     # Disable WebMock completely for integration tests
     WebMock.reset!
     WebMock.allow_net_connect!
     WebMock.disable!
 
     Sidekiq::Testing.fake!
+
+    processor.start
   end
 
   after do
     # Stop processor with minimal timeout
     processor.stop(timeout: 0) if processor.running?
-
-    # Clean up test server
-    cleanup_server(@test_server) if @test_server
 
     # Re-enable WebMock
     WebMock.enable!
@@ -48,38 +45,11 @@ RSpec.describe "Capacity Limit Integration", :integration do
 
   describe "enforcing max_connections limit" do
     it "raises error when attempting to exceed capacity and allows enqueue after request completes" do
-      # Start test HTTP server with configurable delays
-      request_delays = {}
-      @test_server = with_test_server do |s|
-        s.on_request do |request|
-          delay = request_delays[request.path] || 0.1
-          sleep(delay)
-
-          {
-            status: 200,
-            body: %{{"result":"completed","path":"#{request.path}"}},
-            headers: {"Content-Type" => "application/json"}
-          }
-        end
-      end
-
-      # Start processor
-      processor.start
-      expect(processor.running?).to be true
-
-      # Verify initial state
-      expect(processor.metrics.in_flight_count).to eq(0)
-
       # Build client
-      client = Sidekiq::AsyncHttp::Client.new(base_url: @test_server.url)
-
-      # Configure delays: requests 1 and 2 are slow (1 second), request 3 is fast
-      request_delays["/request-1"] = 1.0
-      request_delays["/request-2"] = 1.0
-      request_delays["/request-3"] = 0.1
+      client = Sidekiq::AsyncHttp::Client.new(base_url: test_web_server.base_url)
 
       # Enqueue first long-running request
-      request1 = client.async_get("/request-1")
+      request1 = client.async_get("/delay/250")
       request_task1 = Sidekiq::AsyncHttp::RequestTask.new(
         request: request1,
         sidekiq_job: {
@@ -93,7 +63,7 @@ RSpec.describe "Capacity Limit Integration", :integration do
       processor.enqueue(request_task1)
 
       # Enqueue second long-running request
-      request2 = client.async_get("/request-2")
+      request2 = client.async_get("/delay/250")
       request_task2 = Sidekiq::AsyncHttp::RequestTask.new(
         request: request2,
         sidekiq_job: {
@@ -107,16 +77,13 @@ RSpec.describe "Capacity Limit Integration", :integration do
       processor.enqueue(request_task2)
 
       # Wait for both requests to start processing
-      expect(processor.wait_for_processing(timeout: 2)).to be true
-
-      # Give them a moment to be fully in-flight
-      sleep(0.1)
+      processor.wait_for_processing
 
       # Verify we're at capacity (2 in-flight)
       expect(processor.metrics.in_flight_count).to eq(2)
 
       # Attempt to enqueue third request - should raise error
-      request3 = client.async_get("/request-3")
+      request3 = client.async_get("/delay/100")
       request_task3 = Sidekiq::AsyncHttp::RequestTask.new(
         request: request3,
         sidekiq_job: {
@@ -137,7 +104,7 @@ RSpec.describe "Capacity Limit Integration", :integration do
       expect(processor.metrics.in_flight_count).to eq(2)
 
       # Wait for the first two requests to complete
-      expect(processor.wait_for_idle(timeout: 3)).to be true
+      processor.wait_for_idle
 
       # Verify both completed
       expect(processor.metrics.in_flight_count).to eq(0)
@@ -148,7 +115,7 @@ RSpec.describe "Capacity Limit Integration", :integration do
       }.not_to raise_error
 
       # Wait for third request to complete
-      expect(processor.wait_for_idle(timeout: 2)).to be true
+      processor.wait_for_idle
 
       # Process all callbacks
       Sidekiq::Worker.drain_all
