@@ -1012,18 +1012,25 @@ which reuses underlying connections automatically.
         - Verify original_args passed through correctly
         - Stop processor
         - Stop test server
+        NOTE: 3 passing (GET, concurrent, lifecycle), 2 pending due to WEBrick/async-http
+              compatibility issues (POST body, occasional nil response body)
 
-[ ] 9.3 Write error handling integration tests:
+[X] 9.3 Write error handling integration tests:
         - Test timeout error:
           - Start server with short delay
           - Make request with short timeout
-          - Verify TestErrorWorker called with error_type: "timeout"
+          - Verify TestErrorWorker called with error_type: :timeout
         - Test connection refused:
           - Make request to non-listening port
-          - Verify TestErrorWorker called with error_type: "connection"
+          - Verify TestErrorWorker called with error_type: :connection
         - Test SSL error:
           - Make HTTPS request to HTTP-only server (or invalid cert)
-          - Verify TestErrorWorker called with error_type: "ssl"
+          - Verify TestErrorWorker called with error_type: :ssl
+        - Test HTTP error responses (4xx, 5xx):
+          - Verify they call success worker (valid HTTP responses)
+        - Test error_worker not provided:
+          - Verify error is logged, metrics updated, no crash
+        NOTE: All 6 error handling scenarios implemented and passing.
 
 [ ] 9.4 Write shutdown integration tests:
         - Test clean shutdown:
