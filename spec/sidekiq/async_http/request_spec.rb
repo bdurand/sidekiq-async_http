@@ -15,9 +15,36 @@ RSpec.describe Sidekiq::AsyncHttp::Request do
 
       expect(request.method).to eq(:get)
       expect(request.url).to eq("https://api.example.com/users")
-      expect(request.headers).to eq({"Authorization" => "Bearer token"})
+      expect(request.headers.to_h).to eq({"authorization" => "Bearer token"})
       expect(request.body).to be_nil
       expect(request.timeout).to eq(30)
+    end
+
+    it "automatically sets the configured User-Agent header" do
+      Sidekiq::AsyncHttp.configure do |config|
+        config.user_agent = "Sidekiq-AsyncHttp-Test"
+      end
+      request = described_class.new(
+        method: :get,
+        url: "https://api.example.com/users"
+      )
+      expect(request.headers["user-agent"]).to eq("Sidekiq-AsyncHttp-Test")
+    ensure
+      Sidekiq::AsyncHttp.reset_configuration!
+    end
+
+    it "allows overriding the configured User-Agent header" do
+      Sidekiq::AsyncHttp.configure do |config|
+        config.user_agent = "Sidekiq-AsyncHttp-Test"
+      end
+      request = described_class.new(
+        method: :get,
+        url: "https://api.example.com/users",
+        headers: {"User-Agent" => "Custom-Agent"}
+      )
+      expect(request.headers["user-agent"]).to eq("Custom-Agent")
+    ensure
+      Sidekiq::AsyncHttp.reset_configuration!
     end
 
     it "accepts a URI object for url" do

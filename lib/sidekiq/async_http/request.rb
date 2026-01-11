@@ -20,7 +20,10 @@ module Sidekiq::AsyncHttp
       @id = SecureRandom.uuid
       @method = method.is_a?(String) ? method.downcase.to_sym : method
       @url = url
-      @headers = headers
+      @headers = headers.is_a?(HttpHeaders) ? headers : HttpHeaders.new(headers)
+      if Sidekiq::AsyncHttp.configuration.user_agent
+        @headers["user-agent"] ||= Sidekiq::AsyncHttp.configuration.user_agent.to_s
+      end
       @body = body
       @timeout = timeout
       @read_timeout = read_timeout

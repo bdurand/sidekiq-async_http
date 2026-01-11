@@ -7,6 +7,8 @@ module Sidekiq
       attr_reader :max_connections, :idle_connection_timeout,
         :default_request_timeout, :shutdown_timeout, :dns_cache_ttl
 
+      attr_accessor :user_agent
+
       # Create a new Configuration with defaults
       def initialize(
         max_connections: 256,
@@ -15,7 +17,8 @@ module Sidekiq
         shutdown_timeout: 25,
         logger: nil,
         http2_enabled: true,
-        dns_cache_ttl: 300
+        dns_cache_ttl: 300,
+        user_agent: nil
       )
         self.max_connections = max_connections
         self.idle_connection_timeout = idle_connection_timeout
@@ -24,6 +27,7 @@ module Sidekiq
         self.logger = logger
         self.http2_enabled = http2_enabled
         self.dns_cache_ttl = dns_cache_ttl
+        self.user_agent = user_agent
       end
 
       # Get the logger to use (configured logger or Sidekiq.logger)
