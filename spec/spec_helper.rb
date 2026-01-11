@@ -67,7 +67,7 @@ RSpec.configure do |config|
   end
 
   config.after do
-    Sidekiq::AsyncHttp.processor.shutdown if Sidekiq::AsyncHttp.running?
+    Sidekiq::AsyncHttp.reset! if Sidekiq::AsyncHttp.running?
   end
 
   config.around do |example|

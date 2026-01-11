@@ -22,10 +22,12 @@ Gem::Specification.new do |spec|
   # The `git ls-files -z` loads the files in the RubyGem that have been added into git.
   ignore_files = %w[
     .
+    AGENTS.md
     Appraisals
     Gemfile
     Gemfile.lock
     Rakefile
+    docker-compose.yml
     bin/
     gemfiles/
     spec/

@@ -137,23 +137,58 @@ module Sidekiq::AsyncHttp
     end
 
     # Start the processor
+    #
     # @return [void]
-    def start!
-      @processor ||= Processor.new(configuration)
+    def start
+      return if running?
+
+      @processor = Processor.new(configuration)
       @processor.start
     end
 
-    # Stop the processor
+    # Signal the processor to drain (stop accepting new requests)
+    #
     # @return [void]
+    def quiet
+      return unless running?
+
+      @processor.drain
+    end
+
+    # Stop the processor gracefully
+    #
+    # @param timeout [Float, nil] maximum time to wait for in-flight requests to complete
+    # @return [void]
+    def stop(timeout: nil)
+      return unless @processor
+
+      timeout ||= configuration.shutdown_timeout
+      @processor.stop(timeout: timeout)
+      @processor = nil
+    end
+
+    # Start the processor (deprecated alias for #start)
+    #
+    # @return [void]
+    # @deprecated Use {#start} instead
+    def start!
+      start
+    end
+
+    # Stop the processor (deprecated alias for #stop)
+    #
+    # @return [void]
+    # @deprecated Use {#stop} instead
     def shutdown
-      @processor&.stop
+      stop
     end
 
     # Reset all state (useful for testing)
+    #
     # @return [void]
     # @api private
     def reset!
-      @processor&.stop
+      @processor&.stop(timeout: 0)
       @processor = nil
       @configuration = nil
     end

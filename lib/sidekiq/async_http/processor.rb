@@ -43,7 +43,7 @@ module Sidekiq
           run_reactor
         rescue => e
           # Log error but don't crash
-          @config.logger&.error("Async HTTP Processor error: #{e.message}\n#{e.backtrace.join("\n")}")
+          @config.logger&.error("[Sidekiq::AsyncHttp] Processor error: #{e.message}\n#{e.backtrace.join("\n")}")
         ensure
           @state.set(:stopped)
         end
@@ -86,11 +86,11 @@ module Sidekiq
 
           # Log re-enqueue
           @config.logger&.info(
-            "Async HTTP re-enqueued incomplete request #{task.id} to #{task.job_worker_class.name}"
+            "[Sidekiq::AsyncHttp] Re-enqueued incomplete request #{task.id} to #{task.job_worker_class.name}"
           )
         rescue => e
           @config.logger&.error(
-            "Async HTTP failed to re-enqueue request #{task.id}: #{e.class} - #{e.message}"
+            "[Sidekiq::AsyncHttp] Failed to re-enqueue request #{task.id}: #{e.class} - #{e.message}"
           )
         end
 
@@ -105,7 +105,10 @@ module Sidekiq
       # Drain the processor (stop accepting new requests)
       # @return [void]
       def drain
-        @state.set(:draining) if running?
+        return unless running?
+
+        @state.set(:draining)
+        @config.logger&.info("[Sidekiq::AsyncHttp] Processor draining (no longer accepting new requests)")
       end
 
       # Enqueue a request task for processing
@@ -192,7 +195,7 @@ module Sidekiq
           # Signal that the reactor is ready
           @reactor_ready.set
 
-          @config.logger&.info("Async HTTP Processor started")
+          @config.logger&.info("[Sidekiq::AsyncHttp] Processor started")
 
           # Main loop: monitor shutdown/drain and process requests
           loop do
@@ -214,16 +217,16 @@ module Sidekiq
             task.async do
               process_request(request_task)
             rescue => e
-              @config.logger&.error("Async HTTP Error processing request: #{e.inspect}\n#{e.backtrace.join("\n")}")
+              @config.logger&.error("[Sidekiq::AsyncHttp] Error processing request: #{e.inspect}\n#{e.backtrace.join("\n")}")
             end
           end
 
-          @config.logger&.info("Async HTTP Processor stopped")
+          @config.logger&.info("[Sidekiq::AsyncHttp] Processor stopped")
         rescue Async::Stop
           # Normal shutdown signal
-          @config.logger&.info("Async HTTP Reactor received stop signal")
+          @config.logger&.info("[Sidekiq::AsyncHttp] Reactor received stop signal")
         rescue => e
-          @config.logger&.error("Async HTTP Reactor loop error: #{e.inspect}\n#{e.backtrace.join("\n")}")
+          @config.logger&.error("[Sidekiq::AsyncHttp] Reactor loop error: #{e.inspect}\n#{e.backtrace.join("\n")}")
         end
       end
 
@@ -388,13 +391,13 @@ module Sidekiq
 
         # Log success
         @config.logger&.info(
-          "Async HTTP request #{task.id} succeeded with status #{response[:status]}, " \
+          "[Sidekiq::AsyncHttp] Request #{task.id} succeeded with status #{response[:status]}, " \
           "enqueued #{task.success_worker}"
         )
       rescue => e
         # Log error but don't crash the processor
         @config.logger&.error(
-          "Async HTTP failed to enqueue success worker for request #{task.id}: #{e.class} - #{e.message}"
+          "[Sidekiq::AsyncHttp] Failed to enqueue success worker for request #{task.id}: #{e.class} - #{e.message}"
         )
       end
 
@@ -414,13 +417,13 @@ module Sidekiq
 
         # Log error
         @config.logger&.warn(
-          "Async HTTP request #{task.id} failed with #{error.error_type} error (#{error.class_name}): #{error.message}, " \
+          "[Sidekiq::AsyncHttp] Request #{task.id} failed with #{error.error_type} error (#{error.class_name}): #{error.message}, " \
           "enqueued #{task.error_worker}"
         )
       rescue => e
         # Log error but don't crash the processor
         @config.logger&.error(
-          "Async HTTP failed to enqueue error worker for request #{task.id}: #{e.class} - #{e.message}"
+          "[Sidekiq::AsyncHttp] Failed to enqueue error worker for request #{task.id}: #{e.class} - #{e.message}"
         )
       end
 

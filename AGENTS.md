@@ -2,3 +2,4 @@
 - Avoid using double and instance_double in favor of using real instances of classes when possible.
 - Avoid building stub classes to mock behavior of classes defined in the project for use in tests. Use the real classes instead.
 - Always include the # frozen_string_literal: true magic comment at the top of each ruby file.
+- In YARD documentation have an empty comment line between the description and the tags.
