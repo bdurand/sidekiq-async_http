@@ -83,7 +83,7 @@ module Sidekiq
           message: hash["message"],
           backtrace: hash["backtrace"],
           request_id: hash["request_id"],
-          error_type: hash["error_type"].to_sym
+          error_type: hash["error_type"]&.to_sym
         )
       end
 

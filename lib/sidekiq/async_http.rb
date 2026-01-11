@@ -23,6 +23,7 @@ module Sidekiq::AsyncHttp
   autoload :Configuration, File.join(__dir__, "async_http/configuration")
   autoload :Error, File.join(__dir__, "async_http/error")
   autoload :HttpHeaders, File.join(__dir__, "async_http/http_headers")
+  autoload :Job, File.join(__dir__, "async_http/job")
   autoload :Metrics, File.join(__dir__, "async_http/metrics")
   autoload :Processor, File.join(__dir__, "async_http/processor")
   autoload :Request, File.join(__dir__, "async_http/request")

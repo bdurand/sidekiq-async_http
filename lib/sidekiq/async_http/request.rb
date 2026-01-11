@@ -104,7 +104,7 @@ module Sidekiq::AsyncHttp
 
       # Check if processor is running
       processor = Sidekiq::AsyncHttp.processor
-      unless processor.running?
+      unless processor&.running?
         raise Sidekiq::AsyncHttp::NotRunningError, "Cannot enqueue request: processor is not running"
       end
 

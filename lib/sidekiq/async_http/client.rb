@@ -30,7 +30,7 @@ module Sidekiq::AsyncHttp
     # @param headers [Hash] additional headers to merge with client headers
     # @param params [Hash] query parameters to add to URL
     # @return [Request] request object that must have perform() called
-    def async_request(method, uri, body: nil, json: nil, headers: {}, params: {})
+    def async_request(method, uri, body: nil, json: nil, headers: {}, params: {}, timeout: nil, connect_timeout: nil, read_timeout: nil, write_timeout: nil)
       # Validate method
       unless method.is_a?(Symbol)
         raise ArgumentError, "method must be a Symbol, got: #{method.class}"
@@ -42,7 +42,7 @@ module Sidekiq::AsyncHttp
       end
 
       # Build full URI
-      full_uri = URI.join(@base_url, uri)
+      full_uri = @base_url ? URI.join(@base_url, uri) : URI(uri)
       if params.any?
         query_string = URI.encode_www_form(params)
         full_uri.query = [full_uri.query, query_string].compact.join("&")
@@ -66,7 +66,10 @@ module Sidekiq::AsyncHttp
         url: full_uri.to_s,
         headers: merged_headers.to_h,
         body: request_body,
-        timeout: @timeout
+        timeout: timeout || @timeout,
+        connect_timeout: connect_timeout || @connect_timeout,
+        read_timeout: read_timeout || @read_timeout,
+        write_timeout: write_timeout || @write_timeout
       )
     end
 

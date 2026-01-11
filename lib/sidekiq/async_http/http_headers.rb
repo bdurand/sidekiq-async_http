@@ -5,7 +5,7 @@ module Sidekiq::AsyncHttp
   class HttpHeaders
     def initialize(headers = {})
       @headers = {}
-      headers.each do |key, value|
+      headers&.each do |key, value|
         @headers[key.to_s.downcase] = value
       end
     end

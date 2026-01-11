@@ -129,7 +129,7 @@ module Sidekiq
           duration: hash["duration"],
           request_id: hash["request_id"],
           url: hash["url"],
-          method: hash["method"].to_sym
+          method: hash["method"]&.to_sym
         )
       end
     end

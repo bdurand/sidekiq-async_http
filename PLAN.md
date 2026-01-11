@@ -1314,14 +1314,7 @@ metrics = Sidekiq::AsyncHttp.metrics.to_h
 
 ## Future Enhancements
 
-0. **Default Headers**
-  - keep-alive
-  - encoding/decoding
-  - user-agent (add to configuration)
-1. **Request prioritization** - Priority queue for urgent requests
 2. **Circuit breaker** - Per-host circuit breakers for failing endpoints
-3. **Retry with backoff** - Built-in retry logic for transient failures
-4. **Request deduplication** - Prevent duplicate in-flight requests
 5. **Record current metrics to Redis** - Integrate with Sidekiq's built-in stats system
 6. **Web UI** - Sidekiq Web extension showing async HTTP stats
 7. **Prometheus metrics exporter** - Export metrics in Prometheus format
