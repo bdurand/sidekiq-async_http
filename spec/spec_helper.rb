@@ -30,27 +30,8 @@ Sidekiq.strict_args!(false)
 # Disable Sidekiq logging during tests
 Sidekiq.logger.level = Logger::FATAL
 
-module TestHelper
-  class Worker
-    include Sidekiq::Job
-
-    def perform(*args)
-    end
-  end
-
-  class SuccessWorker
-    include Sidekiq::Job
-
-    def perform(*args)
-    end
-  end
-
-  class ErrorWorker
-    include Sidekiq::Job
-
-    def perform(*args)
-    end
-  end
+Dir.glob(File.join(__dir__, "support", "**", "*.rb")).sort.each do |file|
+  require file
 end
 
 RSpec.configure do |config|

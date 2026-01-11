@@ -990,9 +990,9 @@ which reuses underlying connections automatically.
 ```
 [ ] 9.1 Create test support helpers:
         - Create spec/support/test_workers.rb:
-          - TestSuccessWorker (records calls to class variable)
-          - TestErrorWorker (records calls to class variable)
-          - TestOriginalWorker (records calls to class variable)
+          - TestWorkers::SuccessWorker (records calls to class variable)
+          - TestWorkers::ErrorWorker (records calls to class variable)
+          - TestWorkers::Worker (records calls to class variable)
         - Create spec/support/test_server.rb:
           - Helper to start Async::HTTP::Server for integration tests
           - Configurable response status, headers, body, delay
@@ -1013,7 +1013,7 @@ which reuses underlying connections automatically.
 
 [ ] 9.3 Write error handling integration tests:
         - Test timeout error:
-          - Start server with long delay
+          - Start server with short delay
           - Make request with short timeout
           - Verify TestErrorWorker called with error_type: "timeout"
         - Test connection refused:

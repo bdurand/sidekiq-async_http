@@ -12,7 +12,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
 
   let(:sidekiq_job) do
     {
-      "class" => "TestHelper::Worker",
+      "class" => "TestWorkers::Worker",
       "jid" => "job-123",
       "args" => [1, 2, 3],
       "queue" => "default",
@@ -87,7 +87,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
         success_worker: success_worker
       )
 
-      expect(task.job_worker_class).to eq(TestHelper::Worker)
+      expect(task.job_worker_class).to eq(TestWorkers::Worker)
     end
   end
 
@@ -186,7 +186,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
 
       expect(Sidekiq::Client).to receive(:push) do |job|
         expect(job["retry_count"]).to eq(1)
-        expect(job["class"]).to eq("TestHelper::Worker")
+        expect(job["class"]).to eq("TestWorkers::Worker")
         expect(job["args"]).to eq([1, 2, 3])
         "new-jid"
       end
