@@ -14,19 +14,20 @@ module Sidekiq::AsyncHttp
 
   VERSION = File.read(File.join(__dir__, "../../VERSION")).strip
 
-  require_relative "async_http/time_helper"
+  # Autoload utility modules
+  autoload :ClassHelper, File.join(__dir__, "async_http/class_helper")
+  autoload :TimeHelper, File.join(__dir__, "async_http/time_helper")
 
   # Autoload all components
-  autoload :Client, "sidekiq/async_http/client"
-  autoload :Configuration, "sidekiq/async_http/configuration"
-  autoload :ConnectionPool, "sidekiq/async_http/connection_pool"
-  autoload :Error, "sidekiq/async_http/error"
-  autoload :HttpHeaders, "sidekiq/async_http/http_headers"
-  autoload :Metrics, "sidekiq/async_http/metrics"
-  autoload :Processor, "sidekiq/async_http/processor"
-  autoload :Request, "sidekiq/async_http/request"
-  autoload :RequestTask, "sidekiq/async_http/request_task"
-  autoload :Response, "sidekiq/async_http/response"
+  autoload :Client, File.join(__dir__, "async_http/client")
+  autoload :Configuration, File.join(__dir__, "async_http/configuration")
+  autoload :Error, File.join(__dir__, "async_http/error")
+  autoload :HttpHeaders, File.join(__dir__, "async_http/http_headers")
+  autoload :Metrics, File.join(__dir__, "async_http/metrics")
+  autoload :Processor, File.join(__dir__, "async_http/processor")
+  autoload :Request, File.join(__dir__, "async_http/request")
+  autoload :RequestTask, File.join(__dir__, "async_http/request_task")
+  autoload :Response, File.join(__dir__, "async_http/response")
 
   @processor = nil
   @configuration = nil

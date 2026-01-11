@@ -67,7 +67,7 @@ module Sidekiq::AsyncHttp
     # Get the worker class name from the Sidekiq job
     # @return [String] worker class name
     def job_worker_class
-      @sidekiq_job["class"].split("::").reduce(Object) { |mod, name| mod.const_get(name) }
+      ClassHelper.resolve_class_name(@sidekiq_job["class"])
     end
 
     # Get the job ID from the Sidekiq job.

@@ -48,7 +48,7 @@ module Sidekiq
           # Log error but don't crash
           @config.logger&.error("[Sidekiq::AsyncHttp] Processor error: #{e.message}\n#{e.backtrace.join("\n")}")
         ensure
-          @state.set(:stopped) if @reactor_thread = Thread.current
+          @state.set(:stopped) if @reactor_thread == Thread.current
         end
 
         # Block until the reactor is ready
@@ -460,13 +460,8 @@ module Sidekiq
         )
       end
 
-      # Resolve worker class from class name string
-      # Handles module namespaces correctly
-      # @param class_name [String] the worker class name
-      # @return [Class] the worker class
-      # @raise [NameError] if class cannot be found
       def resolve_worker_class(class_name)
-        Object.const_get(class_name)
+        ClassHelper.resolve_class_name(class_name)
       end
     end
   end

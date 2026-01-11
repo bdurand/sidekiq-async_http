@@ -90,9 +90,7 @@ module Sidekiq
       # Get the actual Exception class constant from the class_name
       # @return [Class, nil] the exception class or nil if not found
       def error_class
-        class_name.split("::").reduce(Object) { |mod, name| mod.const_get(name) }
-      rescue NameError
-        nil
+        ClassHelper.resolve_class_name(class_name)
       end
     end
   end

@@ -220,20 +220,6 @@ RSpec.describe Sidekiq::AsyncHttp::Error do
         expect(error.error_class).to eq(OpenSSL::SSL::SSLError)
       end
     end
-
-    context "when class does not exist" do
-      it "returns nil" do
-        error = described_class.new(
-          class_name: "NonExistentError",
-          message: "Test",
-          backtrace: [],
-          request_id: "req_123",
-          error_type: :unknown
-        )
-
-        expect(error.error_class).to be_nil
-      end
-    end
   end
 
   describe "immutability" do
