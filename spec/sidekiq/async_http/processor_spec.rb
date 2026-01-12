@@ -4,8 +4,8 @@ require "spec_helper"
 
 RSpec.describe Sidekiq::AsyncHttp::Processor do
   let(:config) { Sidekiq::AsyncHttp.configuration }
-  let(:metrics) { Sidekiq::AsyncHttp::Metrics.new }
-  let(:processor) { described_class.new(config, metrics: metrics) }
+  let(:processor) { described_class.new(config) }
+  let(:metrics) { processor.metrics }
 
   # Helper to create request tasks for testing
   def create_request_task(
@@ -412,7 +412,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
     let(:config) do
       Sidekiq::AsyncHttp::Configuration.new(logger: logger)
     end
-    let(:processor_with_logger) { described_class.new(config, metrics: metrics) }
+    let(:processor_with_logger) { described_class.new(config) }
 
     it "logs errors from the reactor loop" do
       # Force an error in the reactor by making dequeue_request raise
@@ -449,7 +449,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
 
     it "consumes requests from the queue" do
       requests_processed = []
-      processor = described_class.new(config, metrics: metrics, callback: ->(task) { requests_processed << task })
+      processor = described_class.new(config, callback: ->(task) { requests_processed << task })
       processor.start
 
       request1 = create_request_task
@@ -465,7 +465,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
 
     it "spawns new fibers for each request" do
       fiber_count = Concurrent::AtomicFixnum.new(0)
-      processor = described_class.new(config, metrics: metrics, callback: ->(task) { fiber_count.increment })
+      processor = described_class.new(config, callback: ->(task) { fiber_count.increment })
       processor.start
 
       # Enqueue multiple requests
@@ -578,7 +578,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
         processor.send(:process_request, mock_request)
       end
 
-      expect(metrics).to have_received(:record_request_start).with(mock_request)
+      expect(metrics).to have_received(:record_request_start)
     end
 
     it "builds Async::HTTP::Request from request object" do
@@ -626,7 +626,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
         processor.send(:process_request, mock_request)
       end
 
-      expect(metrics).to have_received(:record_request_complete).with(mock_request, kind_of(Float))
+      expect(metrics).to have_received(:record_request_complete).with(kind_of(Float))
     end
 
     it "builds response with all attributes" do
@@ -671,7 +671,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       allow(client).to receive(:call).and_raise(Async::TimeoutError.new("Request timed out"))
 
       expect(processor).to receive(:handle_error).with(mock_request, kind_of(Async::TimeoutError))
-      expect(metrics).to receive(:record_error).with(mock_request, :timeout)
+      expect(metrics).to receive(:record_error).with(:timeout)
 
       Async do
         processor.send(:process_request, mock_request)
@@ -682,8 +682,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       allow(client).to receive(:call).and_raise(OpenSSL::SSL::SSLError.new("SSL error"))
 
       expect(processor).to receive(:handle_error).with(mock_request, kind_of(OpenSSL::SSL::SSLError))
-      expect(metrics).to receive(:record_error).with(mock_request, :ssl)
-
+      expect(metrics).to receive(:record_error).with(:ssl)
       Async do
         processor.send(:process_request, mock_request)
       end
@@ -693,7 +692,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       allow(client).to receive(:call).and_raise(Errno::ECONNREFUSED.new("Connection refused"))
 
       expect(processor).to receive(:handle_error).with(mock_request, kind_of(Errno::ECONNREFUSED))
-      expect(metrics).to receive(:record_error).with(mock_request, :connection)
+      expect(metrics).to receive(:record_error).with(:connection)
 
       Async do
         processor.send(:process_request, mock_request)
@@ -704,7 +703,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       allow(client).to receive(:call).and_raise(StandardError.new("Unknown error"))
 
       expect(processor).to receive(:handle_error).with(mock_request, kind_of(StandardError))
-      expect(metrics).to receive(:record_error).with(mock_request, :unknown)
+      expect(metrics).to receive(:record_error).with(:unknown)
 
       Async do
         processor.send(:process_request, mock_request)
@@ -826,7 +825,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
 
       # Create a new processor with a logger in the config
       config_with_logger = Sidekiq::AsyncHttp::Configuration.new(logger: logger)
-      processor_with_logger = described_class.new(config_with_logger, metrics: metrics)
+      processor_with_logger = described_class.new(config_with_logger)
       processor_with_logger.start
       processor_with_logger.send(:handle_success, mock_request, response_hash)
       processor_with_logger.stop
@@ -844,7 +843,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
 
       # Create a new processor with a logger in the config
       config_with_logger = Sidekiq::AsyncHttp::Configuration.new(logger: logger)
-      processor_with_logger = described_class.new(config_with_logger, metrics: metrics)
+      processor_with_logger = described_class.new(config_with_logger)
       processor_with_logger.start
 
       expect {
@@ -952,7 +951,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       logger = Logger.new(log_output)
 
       config_with_logger = Sidekiq::AsyncHttp::Configuration.new(logger: logger)
-      processor_with_logger = described_class.new(config_with_logger, metrics: metrics)
+      processor_with_logger = described_class.new(config_with_logger)
       processor_with_logger.start
 
       exception = Async::TimeoutError.new("Request timed out")
@@ -971,7 +970,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       logger = Logger.new(log_output)
 
       config_with_logger = Sidekiq::AsyncHttp::Configuration.new(logger: logger)
-      processor_with_logger = described_class.new(config_with_logger, metrics: metrics)
+      processor_with_logger = described_class.new(config_with_logger)
       processor_with_logger.start
 
       exception = StandardError.new("Test error")
@@ -1126,7 +1125,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       logger = Logger.new(log_output)
 
       config_with_logger = Sidekiq::AsyncHttp::Configuration.new(logger: logger)
-      processor_with_logger = described_class.new(config_with_logger, metrics: metrics)
+      processor_with_logger = described_class.new(config_with_logger)
 
       processor_with_logger.start
 
@@ -1161,7 +1160,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       logger = Logger.new(log_output)
 
       config_with_logger = Sidekiq::AsyncHttp::Configuration.new(logger: logger)
-      processor_with_logger = described_class.new(config_with_logger, metrics: metrics)
+      processor_with_logger = described_class.new(config_with_logger)
 
       processor_with_logger.start
 

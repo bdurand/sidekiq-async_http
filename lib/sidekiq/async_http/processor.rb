@@ -15,10 +15,16 @@ module Sidekiq
 
       attr_reader :config, :metrics
 
-      def initialize(config = nil, metrics: nil, callback: nil)
+      # Initialize the processor.
+      #
+      # @param config [Configuration] the configuration object
+      # @param callback [Proc, nil] optional callback to invoke after each request.
+      #   The callback will be called with the RequestTask as argument. This is intended
+      #   for testing purposes.
+      # @return [void]
+      def initialize(config = nil, callback: nil)
         @config = config || Sidekiq::AsyncHttp.configuration
-        @metrics = metrics || Metrics.new
-
+        @metrics = Metrics.new(@config)
         @queue = Thread::Queue.new
         @state = Concurrent::AtomicReference.new(:stopped)
         @reactor_thread = nil
@@ -82,6 +88,9 @@ module Sidekiq
           @in_flight_requests.clear
           @pending_tasks.clear
         end
+
+        # Clean up process-specific keys from Redis
+        Stats.instance.cleanup_process_keys
 
         # Re-enqueue each incomplete task
         tasks_to_reenqueue.each do |task|
@@ -274,7 +283,7 @@ module Sidekiq
         task.started!
 
         # Record request start
-        @metrics.record_request_start(task)
+        @metrics.record_request_start
 
         begin
           # Parse the URL to get the endpoint
@@ -320,12 +329,12 @@ module Sidekiq
           @callback&.call(task)
         rescue Async::TimeoutError => e
           task.completed!
-          @metrics.record_error(task, :timeout)
+          @metrics.record_error(:timeout)
           handle_error(task, e)
         rescue => e
           task.completed!
           error_type = classify_error(e)
-          @metrics.record_error(task, error_type)
+          @metrics.record_error(error_type)
           handle_error(task, e)
         ensure
           # Remove from in-flight tracking
@@ -333,7 +342,7 @@ module Sidekiq
             @in_flight_requests.delete(task.id)
           end
           Fiber[:current_request] = nil
-          @metrics.record_request_complete(task, task.duration)
+          @metrics.record_request_complete(task.duration)
         end
       end
 

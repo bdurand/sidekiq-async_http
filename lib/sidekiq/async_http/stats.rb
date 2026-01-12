@@ -12,10 +12,13 @@ module Sidekiq
     # 2. Running totals (30 days): requests, duration, errors, refused
     # 3. Per-process inflight counts (300 seconds): current inflight by host
     class Stats
+      include Singleton
+
       # Redis key prefixes
       HOURLY_PREFIX = "sidekiq:async_http:hourly"
       TOTALS_KEY = "sidekiq:async_http:totals"
       INFLIGHT_PREFIX = "sidekiq:async_http:inflight"
+      MAX_CONNECTIONS_PREFIX = "sidekiq:async_http:max_connections"
 
       # TTLs
       HOURLY_TTL = 30 * 24 * 60 * 60 # 30 days in seconds
@@ -23,7 +26,7 @@ module Sidekiq
       INFLIGHT_TTL = 300 # 5 minutes in seconds
 
       def initialize
-        @hostname = Socket.gethostname
+        @hostname = Socket.gethostname.force_encoding("UTF-8").freeze
         @pid = Process.pid
       end
 
@@ -87,15 +90,20 @@ module Sidekiq
         end
       end
 
-      # Update the inflight request count for this process
+      # Update the inflight request count and max connections for this process
       #
       # @param count [Integer] current number of inflight requests
+      # @param max_connections [Integer] maximum connections for this process
       # @return [void]
-      def update_inflight(count)
+      def update_inflight(count, max_connections)
         inflight_key = "#{INFLIGHT_PREFIX}:#{@hostname}:#{@pid}"
+        max_connections_key = "#{MAX_CONNECTIONS_PREFIX}:#{@hostname}:#{@pid}"
 
         Sidekiq.redis do |redis|
-          redis.set(inflight_key, count, ex: INFLIGHT_TTL)
+          redis.multi do |transaction|
+            transaction.set(inflight_key, count, ex: INFLIGHT_TTL)
+            transaction.set(max_connections_key, max_connections, ex: INFLIGHT_TTL)
+          end
         end
       end
 
@@ -150,6 +158,35 @@ module Sidekiq
         end
       end
 
+      # Get the total max connections across all processes
+      #
+      # @return [Integer] sum of max connections from all active processes
+      def get_total_max_connections
+        Sidekiq.redis do |redis|
+          keys = redis.keys("#{MAX_CONNECTIONS_PREFIX}:*")
+          total = 0
+          keys.each do |key|
+            total += redis.get(key).to_i
+          end
+          total
+        end
+      end
+
+      # Remove process-specific keys (called during processor shutdown)
+      #
+      # @return [void]
+      def cleanup_process_keys
+        inflight_key = "#{INFLIGHT_PREFIX}:#{@hostname}:#{@pid}"
+        max_connections_key = "#{MAX_CONNECTIONS_PREFIX}:#{@hostname}:#{@pid}"
+
+        Sidekiq.redis do |redis|
+          redis.multi do |transaction|
+            transaction.del(inflight_key)
+            transaction.del(max_connections_key)
+          end
+        end
+      end
+
       # Get total inflight count across all processes
       #
       # @return [Integer] total number of inflight requests
@@ -172,6 +209,10 @@ module Sidekiq
           # Delete all inflight keys
           inflight_keys = redis.keys("#{INFLIGHT_PREFIX}:*")
           redis.del(*inflight_keys) unless inflight_keys.empty?
+
+          # Delete all max_connections keys
+          max_connections_keys = redis.keys("#{MAX_CONNECTIONS_PREFIX}:*")
+          redis.del(*max_connections_keys) unless max_connections_keys.empty?
         end
       end
 

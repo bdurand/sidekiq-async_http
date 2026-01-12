@@ -5,35 +5,34 @@ require "concurrent"
 module Sidekiq
   module AsyncHttp
     # Thread-safe metrics collection for async HTTP requests
+    #
+    # @api private
     class Metrics
-      attr_reader :stats
-
-      def initialize(stats: nil)
+      def initialize(config)
+        @config = config
         @total_requests = Concurrent::AtomicFixnum.new(0)
         @error_count = Concurrent::AtomicFixnum.new(0)
         @refused_count = Concurrent::AtomicFixnum.new(0)
         @total_duration = Concurrent::AtomicReference.new(0.0)
         @in_flight_requests = Concurrent::AtomicFixnum.new(0)
         @errors_by_type = Concurrent::Map.new
-        @stats = stats
         @last_inflight_update = Concurrent::AtomicReference.new(Time.now.to_f)
       end
 
       # Record the start of a request
       #
-      # @param task [RequestTask] the request task being started
+      # @param max_connections [Integer] the maximum number of connections allowed
       # @return [void]
-      def record_request_start(request)
+      def record_request_start
         @in_flight_requests.increment
         update_inflight_stats
       end
 
       # Record the completion of a request
       #
-      # @param task [RequestTask] the completed request task
       # @param duration [Float] request duration in seconds
       # @return [void]
-      def record_request_complete(request, duration)
+      def record_request_complete(duration)
         @in_flight_requests.decrement
         @total_requests.increment
 
@@ -45,7 +44,7 @@ module Sidekiq
           end
 
           # Record in stats if available
-          @stats&.record_request(duration)
+          Stats.instance.record_request(duration)
         end
 
         update_inflight_stats
@@ -53,10 +52,9 @@ module Sidekiq
 
       # Record an error
       #
-      # @param task [RequestTask] the failed request task
       # @param error_type [Symbol] the error type (:timeout, :connection, :ssl, :protocol, :unknown)
       # @return [void]
-      def record_error(request, error_type)
+      def record_error(error_type)
         @error_count.increment
 
         # Get or create atomic counter for this error type and increment it
@@ -66,7 +64,7 @@ module Sidekiq
         counter.increment
 
         # Record in stats if available
-        @stats&.record_error
+        Stats.instance.record_error
       end
 
       # Record a refused request (max capacity reached)
@@ -74,7 +72,7 @@ module Sidekiq
       # @return [void]
       def record_refused
         @refused_count.increment
-        @stats&.record_refused
+        Stats.instance.record_refused
       end
 
       # Get the number of in-flight requests
@@ -138,7 +136,7 @@ module Sidekiq
         @errors_by_type = Concurrent::Map.new
         @refused_count = Concurrent::AtomicFixnum.new(0)
         @last_inflight_update = Concurrent::AtomicReference.new(Time.now.to_f)
-        @stats&.reset!
+        Stats.instance.reset!
       end
 
       private
@@ -148,8 +146,6 @@ module Sidekiq
       #
       # @return [void]
       def update_inflight_stats
-        return unless @stats
-
         now = Time.now.to_f
         last_update = @last_inflight_update.get
 
@@ -157,7 +153,7 @@ module Sidekiq
         if now - last_update >= 10
           if @last_inflight_update.compare_and_set(last_update, now)
             count = in_flight_count
-            @stats.update_inflight(count)
+            Stats.instance.update_inflight(count, @config.max_connections)
           end
         end
       end
