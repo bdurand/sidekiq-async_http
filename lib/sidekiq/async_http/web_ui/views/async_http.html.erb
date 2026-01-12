@@ -11,7 +11,9 @@
         </div>
         <div class="stat-card">
           <div class="stat-label"><%= t('async_http.average_duration') %></div>
-          <div class="stat-value" id="avg-duration">0ms</div>
+          <div class="stat-value">
+            <span id="avg-duration">0</span><%= t('async_http.milliseconds') %>
+          </div>
         </div>
         <div class="stat-card">
           <div class="stat-label"><%= t('async_http.total_errors') %></div>

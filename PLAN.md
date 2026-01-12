@@ -1315,9 +1315,9 @@ metrics = Sidekiq::AsyncHttp.metrics.to_h
 ## Future Enhancements
 
 [ ] **Circuit breaker** - Per-host circuit breakers for failing endpoints
-[ ] **Record current metrics to Redis** - Integrate with Sidekiq's built-in stats system
+[x] **Record current metrics to Redis** - Similar to Sidekiq's built-in stats system
 [x] **Web UI** - Sidekiq Web extension showing async HTTP stats
-[ ] **Prometheus metrics exporter** - Export metrics in Prometheus format
+[ ] **Metrics listener** - Hook for exporting metrics
 [x] **Worker DSL Module** - Includable module providing:
    - Class-level `async_http_callbacks` for default success/error workers
    - Instance methods `async_get`, `async_post`, etc.
