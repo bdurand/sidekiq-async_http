@@ -43,13 +43,17 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
 
         @called_args = []
 
-        success_callback do |response, *args|
+        success_callback(retry: false) do |response, *args|
           @called_args << [response, *args]
         end
       end
     end
 
     let(:called_args) { worker_class.instance_variable_get(:@called_args) }
+
+    it "sets the success callback worker class" do
+      expect(worker_class.success_callback_worker).to eq(worker_class::SuccessCallback)
+    end
 
     it "defines a SuccessCallback worker class" do
       worker_class::SuccessCallback.new.perform(response_data, "arg1", "arg2")
@@ -62,6 +66,11 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
       expect(arg1).to eq("arg1")
       expect(arg2).to eq("arg2")
     end
+
+    it "allows setting Sidekiq options" do
+      sidekiq_options = worker_class::SuccessCallback.get_sidekiq_options
+      expect(sidekiq_options["retry"]).to eq(false)
+    end
   end
 
   describe ".error_callback" do
@@ -71,13 +80,17 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
 
         @called_args = []
 
-        error_callback do |error, *args|
+        error_callback(retry: false) do |error, *args|
           @called_args << [error, *args]
         end
       end
     end
 
     let(:called_args) { worker_class.instance_variable_get(:@called_args) }
+
+    it "sets the error callback worker class" do
+      expect(worker_class.error_callback_worker).to eq(worker_class::ErrorCallback)
+    end
 
     it "defines an ErrorCallback worker class" do
       worker_class::ErrorCallback.new.perform(error_data, "err_arg1", "err_arg2")
@@ -89,6 +102,11 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
       expect(error.backtrace).to eq(["line 1", "line 2", "line 3"])
       expect(arg1).to eq("err_arg1")
       expect(arg2).to eq("err_arg2")
+    end
+
+    it "allows setting Sidekiq options" do
+      sidekiq_options = worker_class::ErrorCallback.get_sidekiq_options
+      expect(sidekiq_options["retry"]).to eq(false)
     end
   end
 
@@ -157,6 +175,31 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
         expect(task.error_worker).to eq(worker_class::ErrorCallback)
       end
 
+      context "when success and error workers are set directly" do
+        let(:worker_class) do
+          Class.new do
+            include Sidekiq::AsyncHttp::Job
+
+            @called_args = []
+
+            self.success_callback_worker = TestWorkers::SuccessWorker
+            self.error_callback_worker = TestWorkers::ErrorWorker
+          end
+        end
+
+        it "can set the success worker class directly" do
+          worker_instance.async_request(:put, "https://api.example.com/data/1", json: {name: "test"}, timeout: 20)
+          task = request_tasks.first
+          expect(task.success_worker).to eq(TestWorkers::SuccessWorker)
+        end
+
+        it "can set the error worker class directly" do
+          worker_instance.async_request(:delete, "https://api.example.com/data/1", timeout: 25)
+          task = request_tasks.first
+          expect(task.error_worker).to eq(TestWorkers::ErrorWorker)
+        end
+      end
+
       it "can override success and error workers" do
         worker_instance.async_request(
           :put,
@@ -172,7 +215,7 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
         expect(task.error_worker).to eq(TestWorkers::ErrorWorker)
       end
 
-      it "does not pass an error worker to the request task" do
+      it "does not pass an error worker to the request task if not defined" do
         worker_class_without_error_callback = Class.new do
           include Sidekiq::AsyncHttp::Job
 

@@ -8,15 +8,19 @@ module Sidekiq::AsyncHttp
     end
 
     module ClassMethods
+      attr_reader :success_callback_worker, :error_callback_worker
+
       def client(**options)
         @client = Sidekiq::AsyncHttp::Client.new(**options)
       end
 
-      def success_callback(&block)
+      def success_callback(options = {}, &block)
         success_callback_block = block
 
         worker_class = Class.new do
           include Sidekiq::Job
+
+          sidekiq_options(options) unless options.empty?
 
           define_method(:perform) do |response_data, *args|
             response = Sidekiq::AsyncHttp::Response.from_h(response_data)
@@ -25,13 +29,24 @@ module Sidekiq::AsyncHttp
         end
 
         const_set(:SuccessCallback, worker_class)
+        self.success_callback_worker = const_get(:SuccessCallback)
       end
 
-      def error_callback(&block)
+      def success_callback_worker=(worker_class)
+        unless worker_class.is_a?(Class) && worker_class.included_modules.include?(Sidekiq::Job)
+          raise ArgumentError, "success_callback_worker must be a Sidekiq::Job class"
+        end
+
+        @success_callback_worker = worker_class
+      end
+
+      def error_callback(options = {}, &block)
         error_callback_block = block
 
         worker_class = Class.new do
           include Sidekiq::Job
+
+          sidekiq_options(options) unless options.empty?
 
           define_method(:perform) do |error_data, *args|
             error = Sidekiq::AsyncHttp::Error.from_h(error_data)
@@ -40,6 +55,15 @@ module Sidekiq::AsyncHttp
         end
 
         const_set(:ErrorCallback, worker_class)
+        self.error_callback_worker = const_get(:ErrorCallback)
+      end
+
+      def error_callback_worker=(worker_class)
+        unless worker_class.is_a?(Class) && worker_class.included_modules.include?(Sidekiq::Job)
+          raise ArgumentError, "error_callback_worker must be a Sidekiq::Job class"
+        end
+
+        @error_callback_worker = worker_class
       end
     end
 
@@ -52,8 +76,8 @@ module Sidekiq::AsyncHttp
       success_worker ||= options.delete(:success_worker)
       error_worker ||= options.delete(:error_worker)
 
-      success_worker ||= self.class.const_get(:SuccessCallback) if self.class.const_defined?(:SuccessCallback)
-      error_worker ||= self.class.const_get(:ErrorCallback) if self.class.const_defined?(:ErrorCallback)
+      success_worker ||= self.class.success_callback_worker
+      error_worker ||= self.class.error_callback_worker
 
       request_task = client.async_request(method, url, **options)
       request_task.perform(success_worker: success_worker, error_worker: error_worker)
