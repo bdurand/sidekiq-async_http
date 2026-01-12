@@ -15,6 +15,10 @@
 # - Stop the processor when Sidekiq shuts down (:shutdown event)
 
 Sidekiq.configure_server do |config|
+  config.server_middleware do |chain|
+    chain.add Sidekiq::AsyncHttp::Context::Middleware
+  end
+
   config.on(:startup) do
     Sidekiq::AsyncHttp.start
   end

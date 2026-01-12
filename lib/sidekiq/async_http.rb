@@ -21,6 +21,7 @@ module Sidekiq::AsyncHttp
   # Autoload all components
   autoload :Client, File.join(__dir__, "async_http/client")
   autoload :Configuration, File.join(__dir__, "async_http/configuration")
+  autoload :Context, File.join(__dir__, "async_http/context")
   autoload :Error, File.join(__dir__, "async_http/error")
   autoload :HttpHeaders, File.join(__dir__, "async_http/http_headers")
   autoload :Job, File.join(__dir__, "async_http/job")
@@ -180,22 +181,6 @@ module Sidekiq::AsyncHttp
       timeout ||= configuration.shutdown_timeout
       @processor.stop(timeout: timeout)
       @processor = nil
-    end
-
-    # Start the processor (deprecated alias for #start)
-    #
-    # @return [void]
-    # @deprecated Use {#start} instead
-    def start!
-      start
-    end
-
-    # Stop the processor (deprecated alias for #stop)
-    #
-    # @return [void]
-    # @deprecated Use {#stop} instead
-    def shutdown
-      stop
     end
 
     # Reset all state (useful for testing)

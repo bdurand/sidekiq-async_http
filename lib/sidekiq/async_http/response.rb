@@ -32,18 +32,17 @@ module Sidekiq
 
       # Initialize a Response from an Async::HTTP::Response
       #
-      # @param async_response [Async::HTTP::Response] the async HTTP response object
       # @param duration [Float] request duration in seconds
       # @param request_id [String] the request ID
       # @param url [String] the request URL
       # @param method [Symbol] the HTTP method
-      def initialize(async_response, duration:, request_id:, url:, method:)
-        @status = async_response.status
-        @headers = HttpHeaders.new(async_response.headers)
-        @body = async_response.read
+      def initialize(status:, headers:, body:, duration:, request_id:, url:, method:, protocol:)
+        @status = status
+        @headers = HttpHeaders.new(headers)
+        @body = body
         @duration = duration
         @request_id = request_id
-        @protocol = async_response.protocol
+        @protocol = protocol
         @url = url
         @method = method
         freeze
@@ -111,21 +110,11 @@ module Sidekiq
       # @param hash [Hash] hash representation
       # @return [Response] reconstructed response
       def self.from_h(hash)
-        # Create a mock async response object
-        mock_response = Struct.new(:status, :headers, :protocol).new(
-          hash["status"],
-          hash["headers"],
-          hash["protocol"]
-        )
-
-        # Define read method on the mock
-        def mock_response.read
-          @body
-        end
-        mock_response.instance_variable_set(:@body, hash["body"])
-
         new(
-          mock_response,
+          status: hash["status"],
+          headers: hash["headers"],
+          body: hash["body"],
+          protocol: hash["protocol"],
           duration: hash["duration"],
           request_id: hash["request_id"],
           url: hash["url"],

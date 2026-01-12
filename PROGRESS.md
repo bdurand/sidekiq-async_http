@@ -84,9 +84,9 @@ Created comprehensive module skeleton with:
   - `head(url, **options)` - convenience for HEAD
   - `options(url, **options)` - convenience for OPTIONS
 - Lifecycle methods:
-  - `start!` - starts the processor
-  - `shutdown` - stops the processor
-  - `reset!` - resets all state (useful for testing)
+  - `start` - starts the processor
+  - `stop` - stops the processor
+  - `reset` - resets all state (useful for testing)
 
 ### 1.7 Verify bundle and rake ✅
 - Successfully ran `bundle install` - all dependencies installed

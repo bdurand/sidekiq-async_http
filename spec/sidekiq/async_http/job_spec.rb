@@ -121,14 +121,18 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
 
     let(:worker_instance) { worker_class.new }
 
+    around do |example|
+      Sidekiq::AsyncHttp::Context.with_job(sidekiq_job) do
+        example.run
+      end
+    end
+
     before do
       Sidekiq::AsyncHttp.start
 
       allow(Sidekiq::AsyncHttp.processor).to receive(:enqueue) do |task|
         request_tasks << task
       end
-
-      allow(Sidekiq::Context).to receive(:current).and_return(sidekiq_job)
     end
 
     after do

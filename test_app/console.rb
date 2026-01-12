@@ -1,0 +1,43 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+require "irb"
+require "sidekiq"
+require_relative "../lib/sidekiq-async_http"
+
+# Redis URL from environment or default to localhost
+REDIS_URL = ENV.fetch("REDIS_URL", "redis://localhost:6379/0")
+
+# Configure Sidekiq to use Valkey from docker-compose
+Sidekiq.configure_server do |config|
+  config.redis = {url: REDIS_URL}
+end
+
+Sidekiq.configure_client do |config|
+  config.redis = {url: REDIS_URL}
+end
+
+# Load test workers
+require_relative "workers"
+
+puts "=" * 80
+puts "Sidekiq::AsyncHttp Interactive Console"
+puts "=" * 80
+puts "Redis URL: #{REDIS_URL}"
+puts "Test workers loaded."
+puts ""
+puts "Available workers:"
+puts "  - ExampleWorker.perform_async(url, method = 'GET')"
+puts "  - PostWorker.perform_async(url, data_hash)"
+puts "  - TimeoutWorker.perform_async(url, timeout = 5)"
+puts ""
+puts "Example:"
+puts "  ExampleWorker.perform_async('https://httpbin.org/get')"
+puts ""
+puts "To process jobs, run 'rake test_app' in another terminal."
+puts "Check queued jobs with: Sidekiq::Queue.new.size"
+puts "=" * 80
+puts ""
+
+IRB.start

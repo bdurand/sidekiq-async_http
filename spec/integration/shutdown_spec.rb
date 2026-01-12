@@ -9,7 +9,6 @@ RSpec.describe "Processor Shutdown Integration", :integration do
     Sidekiq::AsyncHttp::Configuration.new.tap do |c|
       c.max_connections = 10
       c.default_request_timeout = 10
-      c.http2_enabled = false
     end
   end
 

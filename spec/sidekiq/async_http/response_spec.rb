@@ -1,33 +1,21 @@
+
 # frozen_string_literal: true
 
 require "spec_helper"
 
 RSpec.describe Sidekiq::AsyncHttp::Response do
-  # Helper to create a mock Async::HTTP::Response
-  def mock_async_response(status:, headers: {}, body: "", protocol: "HTTP/1.1")
-    response = double("Async::HTTP::Response")
-    allow(response).to receive(:status).and_return(status)
-    allow(response).to receive(:headers).and_return(headers)
-    allow(response).to receive(:read).and_return(body)
-    allow(response).to receive(:protocol).and_return(protocol)
-    response
-  end
 
   describe "#initialize" do
-    it "initializes from an Async::HTTP::Response" do
-      async_response = mock_async_response(
+    it "initializes with keyword arguments" do
+      response = described_class.new(
         status: 200,
         headers: {"Content-Type" => "text/plain"},
         body: "Hello, World!",
-        protocol: "HTTP/1.1"
-      )
-
-      response = described_class.new(
-        async_response,
         duration: 0.123,
         request_id: "abc123",
         url: "https://example.com",
-        method: :get
+        method: :get,
+        protocol: "HTTP/1.1"
       )
 
       expect(response.status).to eq(200)
@@ -42,14 +30,15 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
     end
 
     it "handles empty headers" do
-      async_response = mock_async_response(status: 204, headers: {}, body: "")
-
       response = described_class.new(
-        async_response,
+        status: 204,
+        headers: {},
+        body: "",
         duration: 0.05,
         request_id: "xyz789",
         url: "https://example.com/api",
-        method: :delete
+        method: :delete,
+        protocol: "HTTP/1.1"
       )
 
       expect(response.headers.to_h).to eq({})
@@ -58,190 +47,160 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
 
   describe "#success?" do
     it "returns true for 200 status" do
-      async_response = mock_async_response(status: 200)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 200, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.success?).to be true
     end
 
     it "returns true for 201 status" do
-      async_response = mock_async_response(status: 201)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :post)
+      response = described_class.new(status: 201, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :post, protocol: "HTTP/1.1")
       expect(response.success?).to be true
     end
 
     it "returns true for 299 status" do
-      async_response = mock_async_response(status: 299)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 299, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.success?).to be true
     end
 
     it "returns false for 199 status" do
-      async_response = mock_async_response(status: 199)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 199, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.success?).to be false
     end
 
     it "returns false for 300 status" do
-      async_response = mock_async_response(status: 300)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 300, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.success?).to be false
     end
 
     it "returns false for 400 status" do
-      async_response = mock_async_response(status: 400)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 400, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.success?).to be false
     end
 
     it "returns false for 500 status" do
-      async_response = mock_async_response(status: 500)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 500, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.success?).to be false
     end
   end
 
   describe "#redirect?" do
     it "returns true for 300 status" do
-      async_response = mock_async_response(status: 300)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 300, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.redirect?).to be true
     end
 
     it "returns true for 301 status" do
-      async_response = mock_async_response(status: 301)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 301, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.redirect?).to be true
     end
 
     it "returns true for 302 status" do
-      async_response = mock_async_response(status: 302)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 302, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.redirect?).to be true
     end
 
     it "returns true for 399 status" do
-      async_response = mock_async_response(status: 399)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 399, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.redirect?).to be true
     end
 
     it "returns false for 299 status" do
-      async_response = mock_async_response(status: 299)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 299, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.redirect?).to be false
     end
 
     it "returns false for 400 status" do
-      async_response = mock_async_response(status: 400)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 400, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.redirect?).to be false
     end
   end
 
   describe "#client_error?" do
     it "returns true for 400 status" do
-      async_response = mock_async_response(status: 400)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 400, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.client_error?).to be true
     end
 
     it "returns true for 404 status" do
-      async_response = mock_async_response(status: 404)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 404, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.client_error?).to be true
     end
 
     it "returns true for 499 status" do
-      async_response = mock_async_response(status: 499)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 499, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.client_error?).to be true
     end
 
     it "returns false for 399 status" do
-      async_response = mock_async_response(status: 399)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 399, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.client_error?).to be false
     end
 
     it "returns false for 500 status" do
-      async_response = mock_async_response(status: 500)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 500, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.client_error?).to be false
     end
   end
 
   describe "#server_error?" do
     it "returns true for 500 status" do
-      async_response = mock_async_response(status: 500)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 500, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.server_error?).to be true
     end
 
     it "returns true for 502 status" do
-      async_response = mock_async_response(status: 502)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 502, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.server_error?).to be true
     end
 
     it "returns true for 599 status" do
-      async_response = mock_async_response(status: 599)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 599, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.server_error?).to be true
     end
 
     it "returns false for 499 status" do
-      async_response = mock_async_response(status: 499)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 499, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.server_error?).to be false
     end
 
     it "returns false for 600 status" do
-      async_response = mock_async_response(status: 600)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 600, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.server_error?).to be false
     end
   end
 
   describe "#error?" do
     it "returns true for 400 status" do
-      async_response = mock_async_response(status: 400)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 400, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.error?).to be true
     end
 
     it "returns true for 404 status" do
-      async_response = mock_async_response(status: 404)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 404, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.error?).to be true
     end
 
     it "returns true for 500 status" do
-      async_response = mock_async_response(status: 500)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 500, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.error?).to be true
     end
 
     it "returns true for 599 status" do
-      async_response = mock_async_response(status: 599)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 599, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.error?).to be true
     end
 
     it "returns false for 200 status" do
-      async_response = mock_async_response(status: 200)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 200, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.error?).to be false
     end
 
     it "returns false for 300 status" do
-      async_response = mock_async_response(status: 300)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 300, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.error?).to be false
     end
 
     it "returns false for 399 status" do
-      async_response = mock_async_response(status: 399)
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
+      response = described_class.new(status: 399, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
       expect(response.error?).to be false
     end
   end
@@ -249,57 +208,77 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
   describe "#json" do
     it "parses JSON body when Content-Type is application/json" do
       body = '{"name":"John","age":30}'
-      async_response = mock_async_response(
+      response = described_class.new(
         status: 200,
         headers: {"Content-Type" => "application/json"},
-        body: body
+        body: body,
+        duration: 0.1,
+        request_id: "1",
+        url: "http://test.com",
+        method: :get,
+        protocol: "HTTP/1.1"
       )
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
 
       expect(response.json).to eq({"name" => "John", "age" => 30})
     end
 
     it "parses JSON body when Content-Type includes charset" do
       body = '{"success":true}'
-      async_response = mock_async_response(
+      response = described_class.new(
         status: 200,
         headers: {"Content-Type" => "application/json; charset=utf-8"},
-        body: body
+        body: body,
+        duration: 0.1,
+        request_id: "1",
+        url: "http://test.com",
+        method: :get,
+        protocol: "HTTP/1.1"
       )
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
 
       expect(response.json).to eq({"success" => true})
     end
 
     it "raises error when Content-Type is not application/json" do
-      async_response = mock_async_response(
+      response = described_class.new(
         status: 200,
         headers: {"Content-Type" => "text/plain"},
-        body: "plain text"
+        body: "plain text",
+        duration: 0.1,
+        request_id: "1",
+        url: "http://test.com",
+        method: :get,
+        protocol: "HTTP/1.1"
       )
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
 
       expect { response.json }.to raise_error(/Response Content-Type is not application\/json/)
     end
 
     it "raises error when Content-Type is missing" do
-      async_response = mock_async_response(
+      response = described_class.new(
         status: 200,
         headers: {},
-        body: '{"data":"value"}'
+        body: '{"data":"value"}',
+        duration: 0.1,
+        request_id: "1",
+        url: "http://test.com",
+        method: :get,
+        protocol: "HTTP/1.1"
       )
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
 
       expect { response.json }.to raise_error(/Response Content-Type is not application\/json/)
     end
 
     it "raises JSON::ParserError for invalid JSON" do
-      async_response = mock_async_response(
+      response = described_class.new(
         status: 200,
         headers: {"Content-Type" => "application/json"},
-        body: "not valid json"
+        body: "not valid json",
+        duration: 0.1,
+        request_id: "1",
+        url: "http://test.com",
+        method: :get,
+        protocol: "HTTP/1.1"
       )
-      response = described_class.new(async_response, duration: 0.1, request_id: "1", url: "http://test.com", method: :get)
 
       expect { response.json }.to raise_error(JSON::ParserError)
     end
@@ -307,18 +286,15 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
 
   describe "#to_h" do
     it "converts response to hash with string keys" do
-      async_response = mock_async_response(
+      response = described_class.new(
         status: 201,
         headers: {"Content-Type" => "application/json", "X-Request-Id" => "abc"},
         body: '{"created":true}',
-        protocol: "HTTP/2"
-      )
-      response = described_class.new(
-        async_response,
         duration: 0.456,
         request_id: "req-123",
         url: "https://api.example.com/items",
-        method: :post
+        method: :post,
+        protocol: "HTTP/2"
       )
 
       hash = response.to_h
@@ -336,13 +312,15 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
     end
 
     it "includes all attributes" do
-      async_response = mock_async_response(status: 200)
       response = described_class.new(
-        async_response,
+        status: 200,
+        headers: {},
+        body: "",
         duration: 1.5,
         request_id: "xyz",
         url: "http://test.com",
-        method: :get
+        method: :get,
+        protocol: "HTTP/1.1"
       )
 
       hash = response.to_h
@@ -379,18 +357,15 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
     end
 
     it "round-trips through to_h" do
-      async_response = mock_async_response(
+      original = described_class.new(
         status: 404,
         headers: {"X-Custom" => "value"},
         body: "Not Found",
-        protocol: "HTTP/1.1"
-      )
-      original = described_class.new(
-        async_response,
         duration: 0.123,
         request_id: "original-id",
         url: "https://api.test.com/missing",
-        method: :delete
+        method: :delete,
+        protocol: "HTTP/1.1"
       )
 
       hash = original.to_h

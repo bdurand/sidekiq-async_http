@@ -2,6 +2,7 @@
 
 require "time"
 require "socket"
+require "singleton"
 
 module Sidekiq
   module AsyncHttp
@@ -26,8 +27,8 @@ module Sidekiq
       INFLIGHT_TTL = 300 # 5 minutes in seconds
 
       def initialize
-        @hostname = Socket.gethostname.force_encoding("UTF-8").freeze
-        @pid = Process.pid
+        @hostname = ::Socket.gethostname.force_encoding("UTF-8").freeze
+        @pid = ::Process.pid
       end
 
       # Record a completed request

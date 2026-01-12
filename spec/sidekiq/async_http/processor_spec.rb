@@ -645,12 +645,12 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
         processor.send(:process_request, mock_request)
       end
 
-      expect(captured_response[:status]).to eq(201)
-      expect(captured_response[:body]).to eq("response body")
-      expect(captured_response[:headers]).to eq({"X-Custom" => "value"})
-      expect(captured_response[:protocol]).to eq("HTTP/2")
-      expect(captured_response[:request_id]).to eq(mock_request.id)
-      expect(captured_response[:duration]).to be_a(Float)
+      expect(captured_response.status).to eq(201)
+      expect(captured_response.body).to eq("response body")
+      expect(captured_response.headers["X-Custom"]).to eq("value")
+      expect(captured_response.protocol).to eq("HTTP/2")
+      expect(captured_response.request_id).to eq(mock_request.id)
+      expect(captured_response.duration).to be_a(Float)
     end
 
     it "calls handle_success on successful response" do
@@ -660,7 +660,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       allow(async_response).to receive(:headers).and_return({})
       allow(async_response).to receive(:protocol).and_return("HTTP/2")
 
-      expect(processor).to receive(:handle_success).with(mock_request, kind_of(Hash))
+      expect(processor).to receive(:handle_success).with(mock_request, kind_of(Sidekiq::AsyncHttp::Response))
 
       Async do
         processor.send(:process_request, mock_request)
@@ -1021,7 +1021,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       # Set up HTTP client mock
       allow(Async::HTTP::Client).to receive(:new).and_return(mock_client)
       allow(mock_client).to receive(:call).and_return(mock_async_response)
-      allow(mock_async_response).to receive(:body).and_return("response body")
+      allow(mock_async_response).to receive(:body).and_return(StringIO.new("response body"))
 
       processor.start
 

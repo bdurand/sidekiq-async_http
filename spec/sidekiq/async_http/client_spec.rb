@@ -66,26 +66,6 @@ RSpec.describe Sidekiq::AsyncHttp::Client do
       expect(result.timeout).to eq(30)
     end
 
-    context "validation" do
-      it "validates method is a symbol" do
-        expect do
-          client.async_request("get", "/users")
-        end.to raise_error(ArgumentError, "method must be a Symbol, got: String")
-      end
-
-      it "validates uri is provided" do
-        expect do
-          client.async_request(:get, nil)
-        end.to raise_error(ArgumentError, "uri is required")
-      end
-
-      it "validates uri is not empty" do
-        expect do
-          client.async_request(:get, "")
-        end.to raise_error(ArgumentError, "uri is required")
-      end
-    end
-
     context "with URI joining" do
       it "joins base_url with relative path" do
         client.async_request(:get, "/users")

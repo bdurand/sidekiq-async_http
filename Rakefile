@@ -20,3 +20,13 @@ require "rspec/core/rake_task"
 RSpec::Core::RakeTask.new(:spec)
 
 task default: [:spec]
+
+desc "Run the test application for manual testing"
+task :test_app do
+  exec "ruby test_app/run.rb"
+end
+
+desc "Open an interactive console with test workers loaded"
+task :console do
+  exec "ruby test_app/console.rb"
+end

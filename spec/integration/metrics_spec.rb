@@ -9,7 +9,6 @@ RSpec.describe "Metrics Integration", :integration do
     Sidekiq::AsyncHttp::Configuration.new.tap do |c|
       c.max_connections = 20
       c.default_request_timeout = 2
-      c.http2_enabled = false
     end
   end
 

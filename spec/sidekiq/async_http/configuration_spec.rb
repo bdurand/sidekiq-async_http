@@ -13,7 +13,6 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
         expect(config.default_request_timeout).to eq(30)
         expect(config.shutdown_timeout).to eq(25)
         expect(config.logger).to eq(Sidekiq.logger)
-        expect(config.http2_enabled?).to be(true)
         expect(config.dns_cache_ttl).to eq(300)
       end
     end
@@ -27,7 +26,6 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
           default_request_timeout: 60,
           shutdown_timeout: 30,
           logger: custom_logger,
-          http2_enabled: false,
           dns_cache_ttl: 600
         )
 
@@ -36,7 +34,6 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
         expect(config.default_request_timeout).to eq(60)
         expect(config.shutdown_timeout).to eq(30)
         expect(config.logger).to eq(custom_logger)
-        expect(config.http2_enabled?).to be(false)
         expect(config.dns_cache_ttl).to eq(600)
       end
     end
@@ -160,7 +157,6 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
         default_request_timeout: 60,
         shutdown_timeout: 30,
         logger: custom_logger,
-        http2_enabled: false,
         dns_cache_ttl: 600
       )
 
@@ -172,7 +168,6 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
       expect(hash["default_request_timeout"]).to eq(60)
       expect(hash["shutdown_timeout"]).to eq(30)
       expect(hash["logger"]).to eq(custom_logger)
-      expect(hash["http2_enabled"]).to be(false)
       expect(hash["dns_cache_ttl"]).to eq(600)
     end
   end

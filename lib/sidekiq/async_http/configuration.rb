@@ -16,7 +16,6 @@ module Sidekiq
         default_request_timeout: 30,
         shutdown_timeout: 25,
         logger: nil,
-        http2_enabled: true,
         dns_cache_ttl: 300,
         user_agent: nil
       )
@@ -25,7 +24,6 @@ module Sidekiq
         self.default_request_timeout = default_request_timeout
         self.shutdown_timeout = shutdown_timeout
         self.logger = logger
-        self.http2_enabled = http2_enabled
         self.dns_cache_ttl = dns_cache_ttl
         self.user_agent = user_agent
       end
@@ -63,14 +61,6 @@ module Sidekiq
         @dns_cache_ttl = value
       end
 
-      def http2_enabled?
-        @http2_enabled
-      end
-
-      def http2_enabled=(value)
-        @http2_enabled = !!value
-      end
-
       # Convert to hash for inspection
       # @return [Hash] hash representation with string keys
       def to_h
@@ -80,7 +70,6 @@ module Sidekiq
           "default_request_timeout" => default_request_timeout,
           "shutdown_timeout" => shutdown_timeout,
           "logger" => logger,
-          "http2_enabled" => http2_enabled?,
           "dns_cache_ttl" => dns_cache_ttl
         }
       end

@@ -1,0 +1,36 @@
+# frozen_string_literal: true
+
+# Example worker that makes HTTP requests
+class ExampleWorker
+  include Sidekiq::AsyncHttp::Job
+
+  sidekiq_options retry: 1
+
+  success_callback do |response, method, url, timeout, delay|
+    Sidekiq.redis do |conn|
+      conn.incr("example_worker_success")
+    end
+  end
+
+  error_callback do |error, method, url, timeout, delay|
+    Sidekiq.redis do |conn|
+      conn.incr("example_worker_error")
+    end
+  end
+
+  class << self
+    def status
+      success = nil
+      error = nil
+      Sidekiq.redis do |conn|
+        success = conn.get("example_worker_success").to_i
+        error = conn.get("example_worker_error").to_i
+      end
+      {success: success, error: error}
+    end
+  end
+
+  def perform(method, url, timeout, delay)
+    async_request(method, url, timeout: timeout)
+  end
+end

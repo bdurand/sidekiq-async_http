@@ -925,7 +925,7 @@ which reuses underlying connections automatically.
           - Valid request with all parameters
           - Request validation (missing/invalid method, url)
           - Perform validation (missing/invalid sidekiq_job, success_worker)
-          - Using Sidekiq::Context.current when sidekiq_job not provided
+          - Using Sidekiq::AsyncHttp::Context.current_job when sidekiq_job not provided
           - Error worker optional (falls back to retry behavior)
 
 [X] 7.2 Implement Request processing integration:

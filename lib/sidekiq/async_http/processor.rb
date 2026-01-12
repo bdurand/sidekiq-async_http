@@ -292,10 +292,8 @@ module Sidekiq
 
           # Create or reuse a client for this endpoint
           # Async::HTTP::Client handles connection pooling and reuse internally
-          client = Async::HTTP::Client.new(
-            endpoint,
-            protocol: @config.http2_enabled? ? Async::HTTP::Protocol::HTTP2 : Async::HTTP::Protocol::HTTP1
-          )
+          # Protocol is automatically negotiated via ALPN (HTTP/2 preferred, fallback to HTTP/1.1)
+          client = Async::HTTP::Client.new(endpoint)
 
           # Build Async::HTTP::Request
           http_request = build_http_request(task.request)
@@ -381,19 +379,17 @@ module Sidekiq
       # @param task [RequestTask] the original request task
       # @param response_data [Hash] the response data
       # @return [Response] the response object
-      def build_response(task, response_data)
-        # For now, return a simple hash-based response
-        # This will be replaced with proper Response Data.define object later
-        {
-          status: response_data[:status],
-          headers: response_data[:headers],
-          body: response_data[:body],
+      def build_response(task, http_response)
+        Response.new(
+          status: http_response[:status],
+          headers: http_response[:headers],
+          body: http_response[:body],
+          protocol: http_response[:protocol],
           duration: task.duration,
           request_id: task.id,
-          protocol: response_data[:protocol],
           url: task.request.url,
           method: task.request.method
-        }
+        )
       end
 
       # Classify an error by type
@@ -426,7 +422,7 @@ module Sidekiq
         worker_class = resolve_worker_class(task.success_worker)
 
         # Enqueue the success worker with response and original args
-        worker_class.perform_async(response, *task.job_args)
+        worker_class.perform_async(response.to_h, *task.job_args)
 
         # Log success
         @config.logger&.info(

@@ -31,18 +31,7 @@ module Sidekiq::AsyncHttp
     # @param params [Hash] query parameters to add to URL
     # @return [Request] request object that must have perform() called
     def async_request(method, uri, body: nil, json: nil, headers: {}, params: {}, timeout: nil, connect_timeout: nil, read_timeout: nil, write_timeout: nil)
-      # Validate method
-      unless method.is_a?(Symbol)
-        raise ArgumentError, "method must be a Symbol, got: #{method.class}"
-      end
-
-      # Validate uri
-      if uri.nil? || (uri.is_a?(String) && uri.empty?)
-        raise ArgumentError, "uri is required"
-      end
-
-      # Build full URI
-      full_uri = @base_url ? URI.join(@base_url, uri) : URI(uri)
+      full_uri = @base_url ? URI.join(@base_url, uri.to_s) : URI(uri)
       if params.any?
         query_string = URI.encode_www_form(params)
         full_uri.query = [full_uri.query, query_string].compact.join("&")

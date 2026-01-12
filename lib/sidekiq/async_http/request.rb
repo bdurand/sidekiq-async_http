@@ -62,18 +62,21 @@ module Sidekiq::AsyncHttp
     # Prepare the request for execution with callback workers.
     #
     # @param sidekiq_job [Hash, nil] Sidekiq job hash with "class" and "args" keys.
-    #   If not provided, uses Sidekiq::Context.current (Sidekiq 8+).
+    #   If not provided, uses Sidekiq::AsyncHttp::Context.current_job.
+    #   This requires the Sidekiq::AsyncHttp::Context::Middleware to be added
+    #   to the Sidekiq server middleware chain. This is done by default if you require
+    #   the "sidekiq/async_http/sidekiq" file.
     # @param success_worker [Class] Worker class (must include Sidekiq::Job) to call on successful response
     # @param error_worker [Class, nil] Worker class (must include Sidekiq::Job) to call on error.
     #   If nil, errors will be logged and the original job will be retried.
     # @return [String] the request ID
     def perform(success_worker:, sidekiq_job: nil, error_worker: nil)
       # Get current job if not provided
-      @job = sidekiq_job || (defined?(Sidekiq::Context) ? Sidekiq::Context.current : nil)
+      @job = sidekiq_job || (defined?(Sidekiq::AsyncHttp::Context) ? Sidekiq::AsyncHttp::Context.current_job : nil)
 
       # Validate sidekiq_job
       if @job.nil?
-        raise ArgumentError, "sidekiq_job is required (provide hash or ensure Sidekiq::Context.current is set)"
+        raise ArgumentError, "sidekiq_job is required (provide hash or ensure Sidekiq::AsyncHttp::Context.current_job is set)"
       end
 
       unless @job.is_a?(Hash)

@@ -52,7 +52,6 @@ RSpec.describe Sidekiq::AsyncHttp do
         c.default_request_timeout = 60
         c.shutdown_timeout = 30
         c.logger = custom_logger
-        c.http2_enabled = false
         c.dns_cache_ttl = 600
       end
 
@@ -61,7 +60,6 @@ RSpec.describe Sidekiq::AsyncHttp do
       expect(config.default_request_timeout).to eq(60)
       expect(config.shutdown_timeout).to eq(30)
       expect(config.logger).to eq(custom_logger)
-      expect(config.http2_enabled?).to be(false)
       expect(config.dns_cache_ttl).to eq(600)
     end
 
@@ -125,7 +123,7 @@ RSpec.describe Sidekiq::AsyncHttp do
     end
 
     it "returns the processor instance when it exists" do
-      described_class.start!
+      described_class.start
       processor = described_class.processor
 
       expect(processor).to be_a(Sidekiq::AsyncHttp::Processor)
@@ -143,7 +141,7 @@ RSpec.describe Sidekiq::AsyncHttp do
     end
 
     it "returns the processor's metrics when processor exists" do
-      described_class.start!
+      described_class.start
       metrics = described_class.metrics
 
       expect(metrics).to be_a(Sidekiq::AsyncHttp::Metrics)
@@ -317,36 +315,6 @@ RSpec.describe Sidekiq::AsyncHttp do
       expect(second_processor).to be_a(Sidekiq::AsyncHttp::Processor)
       expect(second_processor).not_to be(first_processor)
       expect(second_processor).to be_running
-    end
-  end
-
-  describe ".start! (deprecated)" do
-    after do
-      described_class.reset!
-    end
-
-    it "delegates to .start" do
-      expect(described_class).to receive(:start).and_call_original
-
-      described_class.start!
-
-      expect(described_class).to be_running
-    end
-  end
-
-  describe ".shutdown (deprecated)" do
-    after do
-      described_class.reset!
-    end
-
-    it "delegates to .stop" do
-      described_class.start
-
-      expect(described_class).to receive(:stop).and_call_original
-
-      described_class.shutdown
-
-      expect(described_class).not_to be_running
     end
   end
 end
