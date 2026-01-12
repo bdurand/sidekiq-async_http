@@ -24,7 +24,7 @@ module TestWorkers
     end
   end
 
-  class SuccessWorker
+  class CompletionWorker
     include Sidekiq::Job
 
     @calls = []

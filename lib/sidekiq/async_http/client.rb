@@ -6,7 +6,7 @@ module Sidekiq::AsyncHttp
   # Usage:
   #   client = Sidekiq::AsyncHttp::Client.new(base_url: "https://api.example.com")
   #   request = client.async_get("/users")
-  #   request.perform(sidekiq_job: job_hash, success_worker: "SuccessWorker", error_worker: "ErrorWorker")
+  #   request.perform(sidekiq_job: job_hash, completion_worker: "CompletionWorker", error_worker: "ErrorWorker")
   #
   # The Client handles building HTTP requests with proper URL joining, header merging,
   # and parameter encoding. Call perform() on the returned Request to execute it asynchronously.

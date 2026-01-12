@@ -30,7 +30,7 @@ module Sidekiq::AsyncHttp
       @connect_timeout = connect_timeout
       @write_timeout = write_timeout
       @job = nil
-      @success_worker_class = nil
+      @completion_worker_class = nil
       @error_worker_class = nil
       @enqueued_at = nil
       validate!
@@ -66,11 +66,11 @@ module Sidekiq::AsyncHttp
     #   This requires the Sidekiq::AsyncHttp::Context::Middleware to be added
     #   to the Sidekiq server middleware chain. This is done by default if you require
     #   the "sidekiq/async_http/sidekiq" file.
-    # @param success_worker [Class] Worker class (must include Sidekiq::Job) to call on successful response
+    # @param completion_worker [Class] Worker class (must include Sidekiq::Job) to call on successful response
     # @param error_worker [Class, nil] Worker class (must include Sidekiq::Job) to call on error.
     #   If nil, errors will be logged and the original job will be retried.
     # @return [String] the request ID
-    def perform(success_worker:, sidekiq_job: nil, error_worker: nil)
+    def perform(completion_worker:, sidekiq_job: nil, error_worker: nil)
       # Get current job if not provided
       @job = sidekiq_job || (defined?(Sidekiq::AsyncHttp::Context) ? Sidekiq::AsyncHttp::Context.current_job : nil)
 
@@ -91,13 +91,13 @@ module Sidekiq::AsyncHttp
         raise ArgumentError, "sidekiq_job must have 'args' array"
       end
 
-      # Validate success_worker
-      if success_worker.nil?
-        raise ArgumentError, "success_worker is required"
+      # Validate completion_worker
+      if completion_worker.nil?
+        raise ArgumentError, "completion_worker is required"
       end
 
-      unless success_worker.is_a?(Class) && success_worker.include?(Sidekiq::Job)
-        raise ArgumentError, "success_worker must be a class that includes Sidekiq::Job"
+      unless completion_worker.is_a?(Class) && completion_worker.include?(Sidekiq::Job)
+        raise ArgumentError, "completion_worker must be a class that includes Sidekiq::Job"
       end
 
       # Validate error_worker if provided
@@ -115,7 +115,7 @@ module Sidekiq::AsyncHttp
       task = RequestTask.new(
         request: self,
         sidekiq_job: @job,
-        success_worker: success_worker,
+        completion_worker: completion_worker,
         error_worker: error_worker
       )
       processor.enqueue(task)

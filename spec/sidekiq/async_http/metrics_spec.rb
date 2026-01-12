@@ -15,7 +15,7 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
     Sidekiq::AsyncHttp::RequestTask.new(
       request: req,
       sidekiq_job: {"class" => "TestWorkers::Worker", "jid" => "jid-123", "args" => []},
-      success_worker: "TestWorkers::SuccessWorker"
+      completion_worker: "TestWorkers::CompletionWorker"
     )
   end
 

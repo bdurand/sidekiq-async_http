@@ -75,7 +75,7 @@ Created comprehensive module skeleton with:
 - Configuration method:
   - `configure` method accepting a block
 - Public API method stubs:
-  - `request(method:, url:, success_worker:, error_worker:, ...)` - main API
+  - `request(method:, url:, completion_worker:, error_worker:, ...)` - main API
   - `get(url, **options)` - convenience for GET
   - `post(url, **options)` - convenience for POST
   - `put(url, **options)` - convenience for PUT

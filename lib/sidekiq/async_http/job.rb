@@ -73,14 +73,14 @@ module Sidekiq::AsyncHttp
 
     def async_request(method, url, **options)
       options = options.dup
-      success_worker ||= options.delete(:success_worker)
+      completion_worker ||= options.delete(:completion_worker)
       error_worker ||= options.delete(:error_worker)
 
-      success_worker ||= self.class.success_callback_worker
+      completion_worker ||= self.class.success_callback_worker
       error_worker ||= self.class.error_callback_worker
 
       request_task = client.async_request(method, url, **options)
-      request_task.perform(success_worker: success_worker, error_worker: error_worker)
+      request_task.perform(completion_worker: completion_worker, error_worker: error_worker)
     end
 
     def async_get(url, **options)

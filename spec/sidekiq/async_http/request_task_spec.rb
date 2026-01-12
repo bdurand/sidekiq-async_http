@@ -20,7 +20,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
     }
   end
 
-  let(:success_worker) { "TestSuccessWorker" }
+  let(:completion_worker) { "TestCompletionWorker" }
   let(:error_worker) { "TestErrorWorker" }
 
   describe "#initialize" do
@@ -28,12 +28,12 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        success_worker: success_worker
+        completion_worker: completion_worker
       )
 
       expect(task.request).to eq(request)
       expect(task.sidekiq_job).to eq(sidekiq_job)
-      expect(task.success_worker).to eq(success_worker)
+      expect(task.completion_worker).to eq(completion_worker)
       expect(task.error_worker).to be_nil
     end
 
@@ -41,7 +41,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        success_worker: success_worker,
+        completion_worker: completion_worker,
         error_worker: error_worker
       )
 
@@ -52,12 +52,12 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task1 = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        success_worker: success_worker
+        completion_worker: completion_worker
       )
       task2 = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        success_worker: success_worker
+        completion_worker: completion_worker
       )
 
       expect(task1.id).to be_a(String)
@@ -69,7 +69,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        success_worker: success_worker
+        completion_worker: completion_worker
       )
 
       expect(task.enqueued_at).to be_nil
@@ -83,7 +83,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        success_worker: success_worker
+        completion_worker: completion_worker
       )
 
       expect(task.job_worker_class).to eq(TestWorkers::Worker)
@@ -95,7 +95,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        success_worker: success_worker
+        completion_worker: completion_worker
       )
 
       expect(task.jid).to eq("job-123")
@@ -107,7 +107,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        success_worker: success_worker
+        completion_worker: completion_worker
       )
 
       expect(task.job_args).to eq([1, 2, 3])
@@ -119,7 +119,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        success_worker: success_worker
+        completion_worker: completion_worker
       )
 
       expect(task.enqueued_duration).to be_nil
@@ -131,7 +131,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        success_worker: success_worker
+        completion_worker: completion_worker
       )
 
       expect(task.duration).to be_nil
@@ -143,7 +143,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        success_worker: success_worker
+        completion_worker: completion_worker
       )
 
       expect(Sidekiq::Client).to receive(:push).with(sidekiq_job).and_return("new-jid")
@@ -162,7 +162,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: job_with_metadata,
-        success_worker: success_worker
+        completion_worker: completion_worker
       )
 
       expect(Sidekiq::Client).to receive(:push) do |job|
@@ -180,7 +180,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        success_worker: success_worker
+        completion_worker: completion_worker
       )
 
       expect(Sidekiq::Client).to receive(:push) do |job|
@@ -199,7 +199,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: job_with_retry,
-        success_worker: success_worker
+        completion_worker: completion_worker
       )
 
       expect(Sidekiq::Client).to receive(:push) do |job|
@@ -217,7 +217,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: job_without_retry,
-        success_worker: success_worker
+        completion_worker: completion_worker
       )
 
       expect(Sidekiq::Client).to receive(:push) do |job|
@@ -234,7 +234,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        success_worker: "TestWorkers::SuccessWorker"
+        completion_worker: "TestWorkers::CompletionWorker"
       )
 
       response = Sidekiq::AsyncHttp::Response.new(
@@ -249,8 +249,10 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       )
 
       task.success!(response)
-      expect(TestWorkers::SuccessWorker.jobs.size).to eq(1)
-      job = TestWorkers::SuccessWorker.jobs.first
+      expect(task.response).to eq(response)
+      expect(task.success?).to be(true)
+      expect(TestWorkers::CompletionWorker.jobs.size).to eq(1)
+      job = TestWorkers::CompletionWorker.jobs.first
       expect(job["args"]).to eq([response.to_h, 1, 2, 3])
     end
   end
@@ -260,7 +262,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        success_worker: "TestWorkers::SuccessWorker",
+        completion_worker: "TestWorkers::CompletionWorker",
         error_worker: "TestWorkers::ErrorWorker"
       )
       task.completed!
@@ -269,6 +271,8 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       error = Sidekiq::AsyncHttp::Error.from_exception(exception, request_id: task.id, duration: task.duration)
 
       task.error!(exception)
+      expect(task.error).to eq(exception)
+      expect(task.error?).to be(true)
       expect(TestWorkers::ErrorWorker.jobs.size).to eq(1)
       job = TestWorkers::ErrorWorker.jobs.first
       expect(job["args"]).to eq([error.to_h, 1, 2, 3])
@@ -278,7 +282,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        success_worker: "TestWorkers::SuccessWorker"
+        completion_worker: "TestWorkers::CompletionWorker"
       )
       task.completed!
 

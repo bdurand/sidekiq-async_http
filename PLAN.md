@@ -96,7 +96,7 @@ A wrapper around Request that includes callback and job context for the Processo
 # - id: UUID for tracking (auto-generated)
 # - request: Request object (the HTTP request details)
 # - sidekiq_job: Hash (the Sidekiq job hash with class, jid, args, etc.)
-# - success_worker: String (class name for success callback)
+# - completion_worker: String (class name for success callback)
 # - error_worker: String (class name for error callback, optional)
 # - @enqueued_at_monotonic: Float (monotonic time when task was enqueued)
 # - @started_at_monotonic: Float (monotonic time when HTTP request started)
@@ -255,7 +255,7 @@ The public API that Sidekiq workers use:
 #   url: "https://api.example.com/webhooks",
 #   headers: { "Content-Type" => "application/json" },
 #   body: payload.to_json,
-#   success_worker: "WebhookSuccessWorker",
+#   completion_worker: "WebhookCompletionWorker",
 #   error_worker: "WebhookErrorWorker",
 #   original_args: [webhook_id, attempt],
 #   timeout: 60
@@ -302,7 +302,7 @@ Hooks into Sidekiq's lifecycle for startup and shutdown:
 7. New Fiber spawned for this request
 8. Fiber makes HTTP request via Async::HTTP::Client (creates per-request client)
 9. Response received, Fiber builds Response object
-10. Processor enqueues success_worker_class.perform_async(response.to_h, *original_args)
+10. Processor enqueues completion_worker_class.perform_async(response.to_h, *original_args)
 11. Metrics updated
 12. Fiber completes
 ```
@@ -570,7 +570,7 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
         - Calling `request` will return a Data object with all attributes set.
         - Write specs for each attribute method and the final `request` method.
 [x] 2.1 Implement Request:
-        - Define with: id, request, original_worker_class, success_worker_class,
+        - Define with: id, request, original_worker_class, completion_worker_class,
           error_worker_class, original_args, enqueued_at, metadata
         - Override initialize for defaults:
           - id: SecureRandom.uuid
@@ -578,7 +578,7 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
           - metadata: {}
         - Add #validate! method that raises ArgumentError for:
           - Missing url
-          - Missing success_worker_class
+          - Missing completion_worker_class
           - Missing error_worker_class
           - Invalid method (not in VALID_METHODS constant)
         - Implement #to_h with string keys for JSON serialization
@@ -870,7 +870,7 @@ which reuses underlying connections automatically.
         - Update Request#perform to validate parameters:
           - sidekiq_job: required hash with "class" and "args" keys minimum
           - If sidekiq_job not provided, use Sidekiq::Context.current
-          - success_worker: required class that includes Sidekiq::Job
+          - completion_worker: required class that includes Sidekiq::Job
           - error_worker: optional class that includes Sidekiq::Job
           - If no error_worker provided, log error and retry original job
         - Add Request#validate! method:
@@ -883,7 +883,7 @@ which reuses underlying connections automatically.
         - Write specs for:
           - Valid request with all parameters
           - Request validation (missing/invalid method, url)
-          - Perform validation (missing/invalid sidekiq_job, success_worker)
+          - Perform validation (missing/invalid sidekiq_job, completion_worker)
           - Using Sidekiq::AsyncHttp::Context.current_job when sidekiq_job not provided
           - Error worker optional (falls back to retry behavior)
 
@@ -949,7 +949,7 @@ which reuses underlying connections automatically.
 ```
 [X] 9.1 Create test support helpers:
         - Create spec/support/test_workers.rb:
-          - TestWorkers::SuccessWorker (records calls to class variable)
+          - TestWorkers::CompletionWorker (records calls to class variable)
           - TestWorkers::ErrorWorker (records calls to class variable)
           - TestWorkers::Worker (records calls to class variable)
         - Create spec/support/test_server.rb:
@@ -966,7 +966,7 @@ which reuses underlying connections automatically.
         - Start processor
         - Make async POST request with test workers
         - Wait for request to complete
-        - Verify TestSuccessWorker.perform_async was called
+        - Verify TestCompletionWorker.perform_async was called
         - Verify response hash contains correct status, body
         - Verify original_args passed through correctly
         - Stop processor
@@ -1126,7 +1126,7 @@ class WebhookDeliveryWorker
       },
       body: payload.to_json,
       timeout: 30,
-      success_worker: "WebhookSuccessWorker",
+      completion_worker: "WebhookCompletionWorker",
       error_worker: "WebhookErrorWorker",
       original_worker: self.class.name,
       original_args: [webhook_id, payload],
@@ -1147,7 +1147,7 @@ end
 ### Success Callback Worker
 
 ```ruby
-class WebhookSuccessWorker
+class WebhookCompletionWorker
   include Sidekiq::Job
 
   def perform(response, webhook_id, payload)
@@ -1289,7 +1289,7 @@ metrics = Sidekiq::AsyncHttp.metrics.to_h
      include Sidekiq::AsyncHttp::Worker
 
      async_http_callbacks(
-       success: "WebhookSuccessWorker",
+       success: "WebhookCompletionWorker",
        error: "WebhookErrorWorker"
      )
 

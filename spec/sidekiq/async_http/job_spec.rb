@@ -171,7 +171,7 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
       it "sets the success and error workers to the dynamically defined callback workers" do
         worker_instance.async_request(:post, "https://api.example.com/data", body: "payload", timeout: 15)
         task = request_tasks.first
-        expect(task.success_worker).to eq(worker_class::SuccessCallback)
+        expect(task.completion_worker).to eq(worker_class::SuccessCallback)
         expect(task.error_worker).to eq(worker_class::ErrorCallback)
       end
 
@@ -182,7 +182,7 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
 
             @called_args = []
 
-            self.success_callback_worker = TestWorkers::SuccessWorker
+            self.success_callback_worker = TestWorkers::CompletionWorker
             self.error_callback_worker = TestWorkers::ErrorWorker
           end
         end
@@ -190,7 +190,7 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
         it "can set the success worker class directly" do
           worker_instance.async_request(:put, "https://api.example.com/data/1", json: {name: "test"}, timeout: 20)
           task = request_tasks.first
-          expect(task.success_worker).to eq(TestWorkers::SuccessWorker)
+          expect(task.completion_worker).to eq(TestWorkers::CompletionWorker)
         end
 
         it "can set the error worker class directly" do
@@ -206,12 +206,12 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
           "https://api.example.com/data/1",
           json: {name: "test"},
           timeout: 20,
-          success_worker: TestWorkers::SuccessWorker,
+          completion_worker: TestWorkers::CompletionWorker,
           error_worker: TestWorkers::ErrorWorker
         )
 
         task = request_tasks.first
-        expect(task.success_worker).to eq(TestWorkers::SuccessWorker)
+        expect(task.completion_worker).to eq(TestWorkers::CompletionWorker)
         expect(task.error_worker).to eq(TestWorkers::ErrorWorker)
       end
 
@@ -227,7 +227,7 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
         worker_class_without_error_callback.new.async_request(:put, "https://api.example.com/data/1", timeout: 30)
         task = request_tasks.first
         expect(task.error_worker).to be_nil
-        expect(task.success_worker).to eq(worker_class_without_error_callback::SuccessCallback)
+        expect(task.completion_worker).to eq(worker_class_without_error_callback::SuccessCallback)
       end
     end
 

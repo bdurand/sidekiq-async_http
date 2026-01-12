@@ -17,7 +17,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
     worker_class: "TestWorkers::Worker",
     jid: nil,
     job_args: [],
-    success_worker: "TestWorkers::SuccessWorker",
+    completion_worker: "TestWorkers::CompletionWorker",
     error_worker: "TestWorkers::ErrorWorker"
   )
     request = Sidekiq::AsyncHttp::Request.new(
@@ -30,7 +30,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
     Sidekiq::AsyncHttp::RequestTask.new(
       request: request,
       sidekiq_job: {"class" => worker_class, "jid" => jid || SecureRandom.uuid, "args" => job_args},
-      success_worker: success_worker,
+      completion_worker: completion_worker,
       error_worker: error_worker
     )
   end
@@ -801,13 +801,13 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
 
     it "resolves worker class from string name" do
       processor.send(:handle_success, mock_request, response)
-      expect(TestWorkers::SuccessWorker.jobs.size).to eq(1)
+      expect(TestWorkers::CompletionWorker.jobs.size).to eq(1)
     end
 
     it "enqueues success worker with response hash and original args" do
       processor.send(:handle_success, mock_request, response)
-      expect(TestWorkers::SuccessWorker.jobs.size).to eq(1)
-      job_args = TestWorkers::SuccessWorker.jobs.last["args"]
+      expect(TestWorkers::CompletionWorker.jobs.size).to eq(1)
+      job_args = TestWorkers::CompletionWorker.jobs.last["args"]
       expect(job_args[0]).to be_a(Hash)
       expect(job_args[0]["status"]).to eq(200)
       expect(job_args[1..]).to eq([1, "test_arg"])
@@ -826,7 +826,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       processor_with_logger.stop
 
       expect(log_output.string).to match(
-        /\[Sidekiq::AsyncHttp\] Request #{Regexp.escape(mock_request.id)} succeeded with status 200.*enqueued TestWorkers::SuccessWorker/
+        /\[Sidekiq::AsyncHttp\] Request #{Regexp.escape(mock_request.id)} succeeded with status 200.*enqueued TestWorkers::CompletionWorker/
       )
     end
   end

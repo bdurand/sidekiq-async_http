@@ -5,17 +5,19 @@ module Sidekiq::AsyncHttp
   class RequestTask
     include TimeHelper
 
-    attr_reader :id, :request, :sidekiq_job, :success_worker, :error_worker
+    attr_reader :id, :request, :sidekiq_job, :completion_worker, :error_worker, :response, :error
 
-    def initialize(request:, sidekiq_job:, success_worker:, error_worker: nil)
+    def initialize(request:, sidekiq_job:, completion_worker:, error_worker: nil)
       @id = SecureRandom.uuid
       @request = request
       @sidekiq_job = sidekiq_job
-      @success_worker = success_worker
+      @completion_worker = completion_worker
       @error_worker = error_worker
       @enqueued_at = nil
       @started_at = nil
       @completed_at = nil
+      @response = nil
+      @error = nil
     end
 
     # Mark task as enqueued
@@ -95,15 +97,18 @@ module Sidekiq::AsyncHttp
       Sidekiq::Client.push(@sidekiq_job)
     end
 
-    # Called with the HTTP response on a completed request.
+    # Called with the HTTP response on a completed request. Note that
+    # the response may represent an HTTP error (4xx or 5xx status).
     #
     # @param response [Sidekiq::AsyncHttp::Response] the HTTP response
     # @return [void]
     def success!(response)
       completed! unless completed_at
 
-      worker_class = ClassHelper.resolve_class_name(@success_worker)
-      raise "Success worker class not set" unless worker_class
+      @response = response
+
+      worker_class = ClassHelper.resolve_class_name(@completion_worker)
+      raise "Completion worker class not set" unless worker_class
 
       worker_class.perform_async(response.to_h, *job_args)
     end
@@ -115,6 +120,8 @@ module Sidekiq::AsyncHttp
     def error!(exception)
       completed! unless completed_at
 
+      @error = exception
+
       if @error_worker
         error = Error.from_exception(exception, request_id: @id, duration: duration)
         worker_class = ClassHelper.resolve_class_name(@error_worker)
@@ -122,6 +129,21 @@ module Sidekiq::AsyncHttp
       else
         retry_job
       end
+    end
+
+    # Return true if the task successfully received a response from the server.
+    # Note that the response may represent an HTTP error (4xx or 5xx status).
+    #
+    # @return [Boolean]
+    def success?
+      !@response.nil?
+    end
+
+    # Return true if an error was raised during the request.
+    #
+    # @return [Boolean]
+    def error?
+      !@error.nil?
     end
   end
 end

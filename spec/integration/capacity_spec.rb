@@ -20,7 +20,7 @@ RSpec.describe "Capacity Limit Integration", :integration do
 
     # Reset all worker call tracking
     TestWorkers::Worker.reset_calls!
-    TestWorkers::SuccessWorker.reset_calls!
+    TestWorkers::CompletionWorker.reset_calls!
     TestWorkers::ErrorWorker.reset_calls!
 
     # Disable WebMock completely for integration tests
@@ -56,7 +56,7 @@ RSpec.describe "Capacity Limit Integration", :integration do
           "jid" => "jid-1",
           "args" => ["arg1"]
         },
-        success_worker: "TestWorkers::SuccessWorker",
+        completion_worker: "TestWorkers::CompletionWorker",
         error_worker: "TestWorkers::ErrorWorker"
       )
       processor.enqueue(request_task1)
@@ -70,7 +70,7 @@ RSpec.describe "Capacity Limit Integration", :integration do
           "jid" => "jid-2",
           "args" => ["arg2"]
         },
-        success_worker: "TestWorkers::SuccessWorker",
+        completion_worker: "TestWorkers::CompletionWorker",
         error_worker: "TestWorkers::ErrorWorker"
       )
       processor.enqueue(request_task2)
@@ -87,7 +87,7 @@ RSpec.describe "Capacity Limit Integration", :integration do
           "jid" => "jid-3",
           "args" => ["arg3"]
         },
-        success_worker: "TestWorkers::SuccessWorker",
+        completion_worker: "TestWorkers::CompletionWorker",
         error_worker: "TestWorkers::ErrorWorker"
       )
 
@@ -117,7 +117,7 @@ RSpec.describe "Capacity Limit Integration", :integration do
       Sidekiq::Worker.drain_all
 
       # Verify all 3 requests completed successfully
-      expect(TestWorkers::SuccessWorker.calls.size).to eq(3)
+      expect(TestWorkers::CompletionWorker.calls.size).to eq(3)
       expect(TestWorkers::ErrorWorker.calls.size).to eq(0)
 
       # Verify no errors in metrics
