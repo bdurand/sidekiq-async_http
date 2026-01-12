@@ -312,9 +312,10 @@ module Sidekiq
           response_data = Async::Task.current.with_timeout(task.request.timeout || @config.default_request_timeout) do
             async_response = client.call(http_request)
 
-            # Read the body to completion - this allows the connection to be reused
+            # Read the body asynchronously to completion - this allows the connection to be reused
             # The async-http client handles connection pooling and keep-alive internally
-            body = async_response.body.read if async_response.body
+            # Using join() instead of read() ensures non-blocking I/O that yields to the reactor
+            body = async_response.body.join if async_response.body
 
             # Build response object
             {

@@ -544,7 +544,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
     # Helper to stub async_response with a body
     def stub_async_response_body(body_content)
       allow(async_response).to receive(:body).and_return(response_body)
-      allow(response_body).to receive(:read).and_return(body_content)
+      allow(response_body).to receive(:join).and_return(body_content)
       allow(async_response).to receive(:close)
     end
 
@@ -612,7 +612,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
         processor.send(:process_request, mock_request)
       end
 
-      expect(response_body).to have_received(:read)
+      expect(response_body).to have_received(:join)
     end
 
     it "records request completion with duration" do

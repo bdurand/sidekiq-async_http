@@ -72,7 +72,6 @@ class TestWebServer
         test_response(env)
       elsif (match = path.match(%r{\A/delay/(\d+)\z}))
         delay = match[1].to_f / 1000.0
-        sleep(delay)
         delay_response(delay)
       else
         [404, {"Content-Type" => "text/plain"}, ["404 page not found\n"]]
@@ -113,7 +112,28 @@ class TestWebServer
   end
 
   def delay_response(delay)
-    [200, {"Content-Type" => "application/json"}, [JSON.generate({delay: delay})]]
+    # Create a streaming body that sends chunks with delays between them
+    # This simulates a slow-streaming server response
+    [200, {"Content-Type" => "application/json"}, StreamingBody.new(delay)]
+  end
+
+  # Rack-compatible streaming body
+  class StreamingBody
+    def initialize(delay)
+      @delay = delay
+    end
+
+    def each
+      # Split the delay across multiple chunks
+      chunk_count = 5
+      chunk_delay = @delay / chunk_count
+
+      chunk_count.times do |i|
+        sleep(chunk_delay)
+        yield JSON.generate({chunk: i, delay: chunk_delay})
+        yield "\n"
+      end
+    end
   end
 
   def extract_headers(env)
