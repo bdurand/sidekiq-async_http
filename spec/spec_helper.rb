@@ -15,6 +15,7 @@ require "bundler/setup"
 require "webmock/rspec"
 require "async/rspec"
 require "sidekiq/testing"
+require "mock_redis"
 
 require_relative "../lib/sidekiq-async_http"
 
@@ -58,7 +59,15 @@ RSpec.configure do |config|
   # Include Async::RSpec::Reactor for async tests
   config.include Async::RSpec::Reactor
 
+  # Setup MockRedis for testing
+  config.before(:suite) do
+    $mock_redis = MockRedis.new # rubocop:disable Style/GlobalVars
+  end
+
   config.before do
+    $mock_redis.flushdb # rubocop:disable Style/GlobalVars
+    # Override Sidekiq.redis to use MockRedis for each test
+    allow(Sidekiq).to receive(:redis).and_yield($mock_redis)
     Sidekiq::Worker.clear_all
   end
 

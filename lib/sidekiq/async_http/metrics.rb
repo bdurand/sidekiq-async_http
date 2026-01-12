@@ -6,22 +6,30 @@ module Sidekiq
   module AsyncHttp
     # Thread-safe metrics collection for async HTTP requests
     class Metrics
-      def initialize
+      attr_reader :stats
+
+      def initialize(stats: nil)
         @total_requests = Concurrent::AtomicFixnum.new(0)
         @error_count = Concurrent::AtomicFixnum.new(0)
+        @refused_count = Concurrent::AtomicFixnum.new(0)
         @total_duration = Concurrent::AtomicReference.new(0.0)
         @in_flight_requests = Concurrent::AtomicFixnum.new(0)
         @errors_by_type = Concurrent::Map.new
+        @stats = stats
+        @last_inflight_update = Concurrent::AtomicReference.new(Time.now.to_f)
       end
 
       # Record the start of a request
+      #
       # @param task [RequestTask] the request task being started
       # @return [void]
       def record_request_start(request)
         @in_flight_requests.increment
+        update_inflight_stats
       end
 
       # Record the completion of a request
+      #
       # @param task [RequestTask] the completed request task
       # @param duration [Float] request duration in seconds
       # @return [void]
@@ -35,10 +43,16 @@ module Sidekiq
             new_total = current_total + duration
             break if @total_duration.compare_and_set(current_total, new_total)
           end
+
+          # Record in stats if available
+          @stats&.record_request(duration)
         end
+
+        update_inflight_stats
       end
 
       # Record an error
+      #
       # @param task [RequestTask] the failed request task
       # @param error_type [Symbol] the error type (:timeout, :connection, :ssl, :protocol, :unknown)
       # @return [void]
@@ -50,6 +64,17 @@ module Sidekiq
           Concurrent::AtomicFixnum.new(0)
         end
         counter.increment
+
+        # Record in stats if available
+        @stats&.record_error
+      end
+
+      # Record a refused request (max capacity reached)
+      #
+      # @return [void]
+      def record_refused
+        @refused_count.increment
+        @stats&.record_refused
       end
 
       # Get the number of in-flight requests
@@ -97,11 +122,13 @@ module Sidekiq
           "total_requests" => total_requests,
           "average_duration" => average_duration,
           "error_count" => error_count,
-          "errors_by_type" => errors_by_type
+          "errors_by_type" => errors_by_type,
+          "refused_count" => @refused_count.value
         }
       end
 
       # Reset all metrics (useful for testing)
+      #
       # @return [void]
       def reset!
         @total_requests = Concurrent::AtomicFixnum.new(0)
@@ -109,6 +136,30 @@ module Sidekiq
         @total_duration = Concurrent::AtomicReference.new(0.0)
         @in_flight_requests = Concurrent::AtomicFixnum.new(0)
         @errors_by_type = Concurrent::Map.new
+        @refused_count = Concurrent::AtomicFixnum.new(0)
+        @last_inflight_update = Concurrent::AtomicReference.new(Time.now.to_f)
+        @stats&.reset!
+      end
+
+      private
+
+      # Update inflight stats (throttled to avoid excessive Redis calls)
+      # Updates every 10 seconds
+      #
+      # @return [void]
+      def update_inflight_stats
+        return unless @stats
+
+        now = Time.now.to_f
+        last_update = @last_inflight_update.get
+
+        # Only update every 10 seconds
+        if now - last_update >= 10
+          if @last_inflight_update.compare_and_set(last_update, now)
+            count = in_flight_count
+            @stats.update_inflight(count)
+          end
+        end
       end
     end
   end

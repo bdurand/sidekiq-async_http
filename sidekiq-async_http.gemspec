@@ -45,4 +45,5 @@ Gem::Specification.new do |spec|
   spec.add_dependency "concurrent-ruby", "~> 1.2"
 
   spec.add_development_dependency "bundler"
+  spec.add_development_dependency "mock_redis"
 end

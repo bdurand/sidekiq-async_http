@@ -3,6 +3,8 @@
 module Sidekiq::AsyncHttp
   # Case insensitive HTTP headers.
   class HttpHeaders
+    include Enumerable
+
     def initialize(headers = {})
       @headers = {}
       headers&.each do |key, value|
@@ -18,6 +20,10 @@ module Sidekiq::AsyncHttp
       @headers[key.to_s.downcase] = value
     end
 
+    def fetch(key, default = nil)
+      @headers.fetch(key.to_s.downcase, default)
+    end
+
     def merge(other_headers)
       new_headers = dup
       other_headers.each do |key, value|
@@ -28,6 +34,14 @@ module Sidekiq::AsyncHttp
 
     def to_h
       @headers.dup
+    end
+
+    def each(&block)
+      @headers.each(&block)
+    end
+
+    def include?(name)
+      @headers.include?(key.to_s.downcase)
     end
   end
 end

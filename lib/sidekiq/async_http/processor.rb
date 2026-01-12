@@ -113,6 +113,7 @@ module Sidekiq
       end
 
       # Enqueue a request task for processing
+      #
       # @param task [RequestTask] the request task to enqueue
       # @raise [RuntimeError] if processor is not running or if at capacity
       # @return [void]
@@ -123,6 +124,7 @@ module Sidekiq
 
         # Check capacity - raise error if at max connections
         if in_flight_count >= @config.max_connections
+          @metrics.record_refused
           raise MaxCapacityError.new("Cannot enqueue request: already at max capacity (#{@config.max_connections} connections)")
         end
 

@@ -97,6 +97,14 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
         .to change { metrics.error_count }.from(0).to(1)
     end
 
+    it "records error in stats if available" do
+      stats = instance_double(Sidekiq::AsyncHttp::Stats)
+      metrics_with_stats = described_class.new(stats: stats)
+
+      expect(stats).to receive(:record_error)
+      metrics_with_stats.record_error(request, :timeout)
+    end
+
     it "tracks errors by type" do
       metrics.record_error(request, :timeout)
 
@@ -125,6 +133,20 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
 
       expect(metrics.errors_by_type.keys).to match_array(error_types)
       expect(metrics.error_count).to eq(5)
+    end
+  end
+
+  describe "#record_refused" do
+    it "records refused request in stats if available" do
+      stats = instance_double(Sidekiq::AsyncHttp::Stats)
+      metrics_with_stats = described_class.new(stats: stats)
+
+      expect(stats).to receive(:record_refused)
+      metrics_with_stats.record_refused
+    end
+
+    it "does not raise error when stats is nil" do
+      expect { metrics.record_refused }.not_to raise_error
     end
   end
 

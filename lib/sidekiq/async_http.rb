@@ -29,6 +29,7 @@ module Sidekiq::AsyncHttp
   autoload :Request, File.join(__dir__, "async_http/request")
   autoload :RequestTask, File.join(__dir__, "async_http/request_task")
   autoload :Response, File.join(__dir__, "async_http/response")
+  autoload :Stats, File.join(__dir__, "async_http/stats")
 
   @processor = nil
   @configuration = nil
