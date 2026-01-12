@@ -53,6 +53,8 @@ module Sidekiq
         rescue => e
           # Log error but don't crash
           @config.logger&.error("[Sidekiq::AsyncHttp] Processor error: #{e.message}\n#{e.backtrace.join("\n")}")
+
+          raise if AsyncHttp.testing?
         ensure
           @state.set(:stopped) if @reactor_thread == Thread.current
         end
@@ -105,6 +107,8 @@ module Sidekiq
           @config.logger&.error(
             "[Sidekiq::AsyncHttp] Failed to re-enqueue request #{task.id}: #{e.class} - #{e.message}"
           )
+
+          raise if AsyncHttp.testing?
         end
 
         @reactor_thread.join(1) if @reactor_thread&.alive?
@@ -254,6 +258,8 @@ module Sidekiq
               process_request(request_task)
             rescue => e
               @config.logger&.error("[Sidekiq::AsyncHttp] Error processing request: #{e.inspect}\n#{e.backtrace.join("\n")}")
+
+              warn(e.inspect, e.backtrace) if AsyncHttp.testing?
             end
           end
 
@@ -280,9 +286,6 @@ module Sidekiq
       # @param task [RequestTask] the request task to process
       # @return [void]
       def process_request(task)
-        # Store task in fiber-local storage for error handling
-        Fiber[:current_request] = task
-
         # Move from pending to in-flight tracking
         @tasks_lock.synchronize do
           @pending_tasks.delete(task.id)
@@ -315,42 +318,56 @@ module Sidekiq
             # Read the body asynchronously to completion - this allows the connection to be reused
             # The async-http client handles connection pooling and keep-alive internally
             # Using join() instead of read() ensures non-blocking I/O that yields to the reactor
-            body = async_response.body.join if async_response.body
+            headers_hash = async_response.headers.to_h
+            body = if async_response.body
+              # Check content-length header if present
+              content_length = headers_hash["content-length"]&.to_i
+              if content_length && content_length > @config.max_response_size
+                raise ResponseTooLargeError.new(
+                  "Response body size (#{content_length} bytes) exceeds maximum allowed size (#{@config.max_response_size} bytes)"
+                )
+              end
+
+              # Read body while checking size
+              chunks = []
+              total_size = 0
+              async_response.body.each do |chunk|
+                total_size += chunk.bytesize
+                if total_size > @config.max_response_size
+                  raise ResponseTooLargeError.new(
+                    "Response body size exceeded maximum allowed size (#{@config.max_response_size} bytes)"
+                  )
+                end
+                chunks << chunk
+              end
+              chunks.join
+            end
 
             # Build response object
             {
               status: async_response.status,
-              headers: async_response.headers.to_h,
+              headers: headers_hash,
               body: body,
               protocol: async_response.protocol
             }
           end
 
-          # Mark task as completed
           task.completed!
-
-          # Build Response object
           response = build_response(task, response_data)
-
-          # Handle success
           handle_success(task, response)
 
           @callback&.call(task)
-        rescue Async::TimeoutError => e
-          task.completed!
-          @metrics.record_error(:timeout)
-          handle_error(task, e)
         rescue => e
           task.completed!
           error_type = classify_error(e)
           @metrics.record_error(error_type)
           handle_error(task, e)
+          @callback&.call(task)
         ensure
           # Remove from in-flight tracking
           @tasks_lock.synchronize do
             @in_flight_requests.delete(task.id)
           end
-          Fiber[:current_request] = nil
           @metrics.record_request_complete(task.duration)
         end
       end
@@ -410,6 +427,8 @@ module Sidekiq
         case exception
         when Async::TimeoutError
           :timeout
+        when ResponseTooLargeError
+          :response_too_large
         when OpenSSL::SSL::SSLError
           :ssl
         when Errno::ECONNREFUSED, Errno::ECONNRESET, Errno::EHOSTUNREACH, Errno::ENETUNREACH
@@ -429,21 +448,11 @@ module Sidekiq
           return
         end
 
-        # Get worker class from class name
-        worker_class = resolve_worker_class(task.success_worker)
+        task.success!(response)
 
-        # Enqueue the success worker with response and original args
-        worker_class.perform_async(response.to_h, *task.job_args)
-
-        # Log success
         @config.logger&.info(
-          "[Sidekiq::AsyncHttp] Request #{task.id} succeeded with status #{response[:status]}, " \
+          "[Sidekiq::AsyncHttp] Request #{task.id} succeeded with status #{response.status}, " \
           "enqueued #{task.success_worker}"
-        )
-      rescue => e
-        # Log error but don't crash the processor
-        @config.logger&.error(
-          "[Sidekiq::AsyncHttp] Failed to enqueue success worker for request #{task.id}: #{e.class} - #{e.message}"
         )
       end
 
@@ -457,18 +466,10 @@ module Sidekiq
           return
         end
 
-        # Build Error object from exception
-        error = Error.from_exception(exception, request_id: task.id)
+        task.error!(exception)
 
-        # Get worker class from class name
-        worker_class = resolve_worker_class(task.error_worker)
-
-        # Enqueue the error worker with error hash and original args
-        worker_class.perform_async(error.to_h, *task.job_args)
-
-        # Log error
         @config.logger&.warn(
-          "[Sidekiq::AsyncHttp] Request #{task.id} failed with #{error.error_type} error (#{error.class_name}): #{error.message}, " \
+          "[Sidekiq::AsyncHttp] Request #{task.id} failed with #{exception.class.name}: #{exception.message}, " \
           "enqueued #{task.error_worker}"
         )
       rescue => e
@@ -476,6 +477,7 @@ module Sidekiq
         @config.logger&.error(
           "[Sidekiq::AsyncHttp] Failed to enqueue error worker for request #{task.id}: #{e.class} - #{e.message}"
         )
+        raise if AsyncHttp.testing?
       end
 
       def resolve_worker_class(class_name)

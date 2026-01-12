@@ -229,35 +229,69 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
     end
   end
 
-  describe "#success" do
-    it "is a no-op method for extension" do
+  describe "#success!" do
+    it "enqueues the success worker" do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        success_worker: success_worker
+        success_worker: "TestWorkers::SuccessWorker"
       )
 
-      expect { task.success({status: 200}) }.not_to raise_error
+      response = Sidekiq::AsyncHttp::Response.new(
+        status: 200,
+        headers: {},
+        body: "OK",
+        request_id: task.id,
+        duration: 0.5,
+        url: "https://api.example.com/users",
+        method: :get,
+        protocol: "HTTP/1.1"
+      )
+
+      task.success!(response)
+      expect(TestWorkers::SuccessWorker.jobs.size).to eq(1)
+      job = TestWorkers::SuccessWorker.jobs.first
+      expect(job["args"]).to eq([response.to_h, 1, 2, 3])
     end
   end
 
-  describe "#error" do
-    it "is a no-op method for extension" do
+  describe "#error!" do
+    it "enqueues the error worker when set" do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        success_worker: success_worker
+        success_worker: "TestWorkers::SuccessWorker",
+        error_worker: "TestWorkers::ErrorWorker"
       )
+      task.completed!
 
-      error = Sidekiq::AsyncHttp::Error.new(
-        error_type: :timeout,
-        message: "Timeout",
-        class_name: "Async::TimeoutError",
-        backtrace: [],
-        request_id: "req-123"
+      exception = StandardError.new("Something went wrong")
+      error = Sidekiq::AsyncHttp::Error.from_exception(exception, request_id: task.id, duration: task.duration)
+
+      task.error!(exception)
+      expect(TestWorkers::ErrorWorker.jobs.size).to eq(1)
+      job = TestWorkers::ErrorWorker.jobs.first
+      expect(job["args"]).to eq([error.to_h, 1, 2, 3])
+    end
+
+    it "retries the job when error worker is not set" do
+      task = described_class.new(
+        request: request,
+        sidekiq_job: sidekiq_job,
+        success_worker: "TestWorkers::SuccessWorker"
       )
+      task.completed!
 
-      expect { task.error(error) }.not_to raise_error
+      exception = StandardError.new("Something went wrong")
+
+      expect(Sidekiq::Client).to receive(:push) do |job|
+        expect(job["retry_count"]).to eq(1)
+        expect(job["class"]).to eq("TestWorkers::Worker")
+        expect(job["args"]).to eq([1, 2, 3])
+        "new-jid"
+      end
+
+      task.error!(exception)
     end
   end
 end

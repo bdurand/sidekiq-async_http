@@ -66,54 +66,6 @@ The **`async-http`** gem (part of the `socketry/async` ecosystem) is the best ch
 
 ---
 
-## Ruby 3.2+ Features
-
-Targeting Ruby 3.2+ enables several improvements:
-
-### 1. `Data.define` for Value Objects
-
-Immutable value objects with less boilerplate:
-
-```ruby
-Request = Data.define(
-  :id, :method, :url, :headers, :body, :timeout,
-  :original_worker_class, :success_worker_class, :error_worker_class,
-  :original_args, :enqueued_at, :metadata
-) do
-  def initialize(id: SecureRandom.uuid, method: :get, headers: {}, body: nil,
-                 timeout: 30, enqueued_at: Time.now, metadata: {}, **rest)
-    super(id:, method:, headers:, body:, timeout:, enqueued_at:, metadata:, **rest)
-  end
-end
-```
-
-**Benefits**: Immutability by default, built-in `#==`, `#hash`, `#to_h`, `#deconstruct_keys` for pattern matching.
-
-### 2. Improved Fiber Efficiency
-
-Ruby 3.2 has ~2-4KB memory per fiber (vs ~8KB+ in 3.0), directly impacting max concurrent requests.
-
-### 3. `Fiber#storage` for Request Context
-
-```ruby
-Fiber[:current_request] = request
-# Later in error handling:
-request = Fiber[:current_request]
-```
-
-### 4. Pattern Matching for Error Classification
-
-```ruby
-case exception
-in Async::TimeoutError then :timeout
-in OpenSSL::SSL::SSLError then :ssl
-in Errno::ECONNREFUSED | Errno::ECONNRESET then :connection
-else :unknown
-end
-```
-
----
-
 ## Component Design
 
 ### 1. `Sidekiq::AsyncHttp::Request`
@@ -235,7 +187,6 @@ class Configuration
   attr_accessor :default_request_timeout
   attr_accessor :shutdown_timeout
   attr_accessor :logger
-  attr_accessor :http2_enabled
   attr_accessor :dns_cache_ttl
 
   def initialize
@@ -699,8 +650,9 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
           - default_request_timeout (default: 30)
           - shutdown_timeout (default: 25)
           - logger (default: nil, will use Sidekiq.logger)
-          - http2_enabled (default: true)
           - dns_cache_ttl (default: 300)
+          - user_agent (default: default for the async-http gem)
+          - max_response_size (default: 1mb)
         - Set defaults in #initialize
         - Implement #validate! that raises ArgumentError for:
           - Non-positive numeric values
@@ -902,11 +854,18 @@ which reuses underlying connections automatically.
           - Clean shutdown (all requests complete)
           - Timeout shutdown (requests re-enqueued)
           - Multiple in-flight requests during shutdown
+[ ] 6.7 Implement Processor - callback hooks
+        - Define hooks for:
+          - on_request_start(request)
+          - on_request_complete(request, response)
+          - on_request_error(request, error)
+        - Allow users to set hooks via configuration
+        - Call hooks at appropriate points in request lifecycle
+        - Write specs verifying hooks are called
 ```
 
 ### Phase 7: Client (Public API)
 
-```
 [X] 7.1 Implement Request validation and Sidekiq job handling:
         - Update Request#perform to validate parameters:
           - sidekiq_job: required hash with "class" and "args" keys minimum

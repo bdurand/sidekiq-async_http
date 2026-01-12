@@ -1,10 +1,8 @@
-
 # frozen_string_literal: true
 
 require "spec_helper"
 
 RSpec.describe Sidekiq::AsyncHttp::Response do
-
   describe "#initialize" do
     it "initializes with keyword arguments" do
       response = described_class.new(

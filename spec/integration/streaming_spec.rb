@@ -76,8 +76,6 @@ RSpec.describe "Streaming Response Integration", :integration do
     # Key assertion: Total time should be ~500ms (concurrent execution)
     # NOT ~1500ms (sequential/blocking execution)
     # Allow some overhead for queueing and processing
-    expect(total_duration).to be < 1.5
-
-    puts "✓ Three 500ms requests completed concurrently in #{total_duration.round(2)}s (expected ~0.5s)"
+    expect(total_duration).to be < 1.0
   end
 end

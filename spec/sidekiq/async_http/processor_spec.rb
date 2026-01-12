@@ -541,37 +541,30 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       allow(metrics).to receive(:record_error)
     end
 
+    # Helper to create a headers double that supports [] access
+    def stub_headers(headers_hash = {})
+      headers_double = double("Headers")
+      allow(headers_double).to receive(:[]) do |key|
+        headers_hash[key]
+      end
+      allow(headers_double).to receive(:to_h).and_return(headers_hash)
+      headers_double
+    end
+
     # Helper to stub async_response with a body
     def stub_async_response_body(body_content)
       allow(async_response).to receive(:body).and_return(response_body)
+      # Support both .each (new) and .join (old) for compatibility
+      allow(response_body).to receive(:each).and_yield(body_content)
       allow(response_body).to receive(:join).and_return(body_content)
       allow(async_response).to receive(:close)
-    end
-
-    it "stores request in Fiber-local storage" do
-      captured_fiber_request = nil
-
-      allow(client).to receive(:call) do
-        captured_fiber_request = Fiber[:current_request]
-        async_response
-      end
-      stub_async_response_body("response body")
-      allow(async_response).to receive(:status).and_return(200)
-      allow(async_response).to receive(:headers).and_return({})
-      allow(async_response).to receive(:protocol).and_return("HTTP/2")
-
-      Async do
-        processor.send(:process_request, mock_request)
-      end
-
-      expect(captured_fiber_request).to eq(mock_request)
     end
 
     it "records request start in metrics" do
       allow(client).to receive(:call).and_return(async_response)
       stub_async_response_body("response body")
       allow(async_response).to receive(:status).and_return(200)
-      allow(async_response).to receive(:headers).and_return({})
+      allow(async_response).to receive(:headers).and_return(stub_headers({}))
       allow(async_response).to receive(:protocol).and_return("HTTP/2")
 
       Async do
@@ -590,7 +583,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       end
       stub_async_response_body("response body")
       allow(async_response).to receive(:status).and_return(200)
-      allow(async_response).to receive(:headers).and_return({})
+      allow(async_response).to receive(:headers).and_return(stub_headers({}))
       allow(async_response).to receive(:protocol).and_return("HTTP/2")
 
       Async do
@@ -604,7 +597,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
     it "reads response body" do
       allow(client).to receive(:call).and_return(async_response)
       allow(async_response).to receive(:status).and_return(200)
-      allow(async_response).to receive(:headers).and_return({"Content-Type" => "application/json"})
+      allow(async_response).to receive(:headers).and_return(stub_headers({"Content-Type" => "application/json"}))
       allow(async_response).to receive(:protocol).and_return("HTTP/2")
       stub_async_response_body('{"result":"success"}')
 
@@ -612,14 +605,14 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
         processor.send(:process_request, mock_request)
       end
 
-      expect(response_body).to have_received(:join)
+      expect(response_body).to have_received(:each)
     end
 
     it "records request completion with duration" do
       allow(client).to receive(:call).and_return(async_response)
       stub_async_response_body("response body")
       allow(async_response).to receive(:status).and_return(200)
-      allow(async_response).to receive(:headers).and_return({})
+      allow(async_response).to receive(:headers).and_return(stub_headers({}))
       allow(async_response).to receive(:protocol).and_return("HTTP/2")
 
       Async do
@@ -633,7 +626,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       allow(client).to receive(:call).and_return(async_response)
       stub_async_response_body("response body")
       allow(async_response).to receive(:status).and_return(201)
-      allow(async_response).to receive(:headers).and_return({"X-Custom" => "value"})
+      allow(async_response).to receive(:headers).and_return(stub_headers({"X-Custom" => "value"}))
       allow(async_response).to receive(:protocol).and_return("HTTP/2")
 
       captured_response = nil
@@ -657,7 +650,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       allow(client).to receive(:call).and_return(async_response)
       stub_async_response_body("response body")
       allow(async_response).to receive(:status).and_return(200)
-      allow(async_response).to receive(:headers).and_return({})
+      allow(async_response).to receive(:headers).and_return(stub_headers({}))
       allow(async_response).to receive(:protocol).and_return("HTTP/2")
 
       expect(processor).to receive(:handle_success).with(mock_request, kind_of(Sidekiq::AsyncHttp::Response))
@@ -712,6 +705,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
 
     it "classifies errors correctly" do
       expect(processor.send(:classify_error, Async::TimeoutError.new)).to eq(:timeout)
+      expect(processor.send(:classify_error, Sidekiq::AsyncHttp::ResponseTooLargeError.new)).to eq(:response_too_large)
       expect(processor.send(:classify_error, OpenSSL::SSL::SSLError.new)).to eq(:ssl)
       expect(processor.send(:classify_error, Errno::ECONNREFUSED.new)).to eq(:connection)
       expect(processor.send(:classify_error, Errno::ECONNRESET.new)).to eq(:connection)
@@ -722,7 +716,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       allow(client).to receive(:call).and_return(async_response)
       stub_async_response_body("response body")
       allow(async_response).to receive(:status).and_return(200)
-      allow(async_response).to receive(:headers).and_return({})
+      allow(async_response).to receive(:headers).and_return(stub_headers({}))
       allow(async_response).to receive(:protocol).and_return("HTTP/2")
 
       Async do
@@ -758,7 +752,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       end
       stub_async_response_body("response body")
       allow(async_response).to receive(:status).and_return(201)
-      allow(async_response).to receive(:headers).and_return({})
+      allow(async_response).to receive(:headers).and_return(stub_headers({}))
       allow(async_response).to receive(:protocol).and_return("HTTP/2")
 
       Async do
@@ -772,7 +766,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       allow(client).to receive(:call).and_return(async_response)
       stub_async_response_body("response body")
       allow(async_response).to receive(:status).and_return(200)
-      allow(async_response).to receive(:headers).and_return({})
+      allow(async_response).to receive(:headers).and_return(stub_headers({}))
       allow(async_response).to receive(:protocol).and_return("HTTP/2")
 
       Async do
@@ -784,16 +778,18 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
   describe "success handling" do
     let(:response_hash) do
       {
-        status: 200,
-        headers: {"content-type" => "application/json"},
-        body: '{"result":"ok"}',
-        protocol: "HTTP/2",
-        request_id: "req-123",
-        url: "https://api.example.com/users",
-        method: "GET",
-        duration: 0.5
+        "status" => 200,
+        "headers" => {"content-type" => "application/json"},
+        "body" => '{"result":"ok"}',
+        "protocol" => "HTTP/2",
+        "request_id" => "req-123",
+        "url" => "https://api.example.com/users",
+        "method" => "GET",
+        "duration" => 0.5
       }
     end
+
+    let(:response) { Sidekiq::AsyncHttp::Response.from_h(response_hash) }
 
     before do
       processor.start
@@ -804,14 +800,13 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
     end
 
     it "resolves worker class from string name" do
-      processor.send(:handle_success, mock_request, response_hash)
+      processor.send(:handle_success, mock_request, response)
       expect(TestWorkers::SuccessWorker.jobs.size).to eq(1)
     end
 
     it "enqueues success worker with response hash and original args" do
-      processor.send(:handle_success, mock_request, response_hash)
+      processor.send(:handle_success, mock_request, response)
       expect(TestWorkers::SuccessWorker.jobs.size).to eq(1)
-      # Sidekiq serializes to JSON, so symbol keys become strings
       job_args = TestWorkers::SuccessWorker.jobs.last["args"]
       expect(job_args[0]).to be_a(Hash)
       expect(job_args[0]["status"]).to eq(200)
@@ -827,33 +822,11 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       config_with_logger = Sidekiq::AsyncHttp::Configuration.new(logger: logger)
       processor_with_logger = described_class.new(config_with_logger)
       processor_with_logger.start
-      processor_with_logger.send(:handle_success, mock_request, response_hash)
+      processor_with_logger.send(:handle_success, mock_request, response)
       processor_with_logger.stop
 
       expect(log_output.string).to match(
         /\[Sidekiq::AsyncHttp\] Request #{Regexp.escape(mock_request.id)} succeeded with status 200.*enqueued TestWorkers::SuccessWorker/
-      )
-    end
-
-    it "handles errors during enqueue gracefully" do
-      allow(TestWorkers::SuccessWorker).to receive(:perform_async).and_raise(StandardError.new("Sidekiq error"))
-
-      log_output = StringIO.new
-      logger = Logger.new(log_output)
-
-      # Create a new processor with a logger in the config
-      config_with_logger = Sidekiq::AsyncHttp::Configuration.new(logger: logger)
-      processor_with_logger = described_class.new(config_with_logger)
-      processor_with_logger.start
-
-      expect {
-        processor_with_logger.send(:handle_success, mock_request, response_hash)
-      }.not_to raise_error
-
-      processor_with_logger.stop
-
-      expect(log_output.string).to match(
-        /\[Sidekiq::AsyncHttp\] Failed to enqueue success worker for request #{Regexp.escape(mock_request.id)}/
       )
     end
   end
@@ -959,11 +932,11 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       processor_with_logger.send(:handle_error, mock_request, exception)
       processor_with_logger.stop
 
-      expect(log_output.string).to match(/\[Sidekiq::AsyncHttp\] Request #{Regexp.escape(mock_request.id)} failed with timeout error/)
+      expect(log_output.string).to match(/\[Sidekiq::AsyncHttp\] Request #{Regexp.escape(mock_request.id)} failed with Async::TimeoutError/)
       expect(log_output.string).to match(/enqueued TestWorkers::ErrorWorker/)
     end
 
-    it "handles errors during enqueue gracefully" do
+    it "handles errors during enqueue gracefully", :disable_testing_mode do
       allow(TestWorkers::ErrorWorker).to receive(:perform_async).and_raise(StandardError.new("Sidekiq error"))
 
       log_output = StringIO.new
@@ -983,14 +956,6 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       expect(log_output.string).to match(/\[Sidekiq::AsyncHttp\] Failed to enqueue error worker for request #{Regexp.escape(mock_request.id)}/)
     end
 
-    it "resolves worker class from string name" do
-      exception = StandardError.new("Test error")
-
-      processor.send(:handle_error, mock_request, exception)
-
-      expect(TestWorkers::ErrorWorker.jobs.size).to eq(1)
-    end
-
     it "includes backtrace in error hash" do
       exception = StandardError.new("Test error")
       exception.set_backtrace(["line 1", "line 2", "line 3"])
@@ -1003,7 +968,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
     end
   end
 
-  describe "graceful shutdown" do
+  describe "graceful shutdown", :disable_testing_mode do
     let(:mock_client) { double("Async::HTTP::Client") }
     let(:mock_headers) { double("Headers", to_h: {"Content-Type" => "application/json"}) }
     let(:mock_async_response) do
@@ -1145,7 +1110,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       expect(log_output.string).to match(/\[Sidekiq::AsyncHttp\] Re-enqueued incomplete request #{Regexp.escape(request.id)} to TestWorkers::Worker/)
     end
 
-    it "handles errors during re-enqueue gracefully" do
+    it "handles errors during re-enqueue gracefully", :disable_testing_mode do
       # Set up slow HTTP response
       stub_request(:get, "https://api.example.com/users")
         .to_return do

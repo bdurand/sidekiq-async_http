@@ -5,7 +5,8 @@ module Sidekiq
     # Configuration for the async HTTP processor
     class Configuration
       attr_reader :max_connections, :idle_connection_timeout,
-        :default_request_timeout, :shutdown_timeout, :dns_cache_ttl
+        :default_request_timeout, :shutdown_timeout, :dns_cache_ttl,
+        :max_response_size
 
       attr_accessor :user_agent
 
@@ -17,6 +18,7 @@ module Sidekiq
         shutdown_timeout: 25,
         logger: nil,
         dns_cache_ttl: 300,
+        max_response_size: 10 * 1024 * 1024,
         user_agent: nil
       )
         self.max_connections = max_connections
@@ -25,6 +27,7 @@ module Sidekiq
         self.shutdown_timeout = shutdown_timeout
         self.logger = logger
         self.dns_cache_ttl = dns_cache_ttl
+        self.max_response_size = max_response_size
         self.user_agent = user_agent
       end
 
@@ -61,6 +64,11 @@ module Sidekiq
         @dns_cache_ttl = value
       end
 
+      def max_response_size=(value)
+        validate_positive(:max_response_size, value)
+        @max_response_size = value
+      end
+
       # Convert to hash for inspection
       # @return [Hash] hash representation with string keys
       def to_h
@@ -70,7 +78,8 @@ module Sidekiq
           "default_request_timeout" => default_request_timeout,
           "shutdown_timeout" => shutdown_timeout,
           "logger" => logger,
-          "dns_cache_ttl" => dns_cache_ttl
+          "dns_cache_ttl" => dns_cache_ttl,
+          "max_response_size" => max_response_size
         }
       end
 

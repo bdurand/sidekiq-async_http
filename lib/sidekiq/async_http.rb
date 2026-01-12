@@ -14,6 +14,8 @@ module Sidekiq::AsyncHttp
 
   class MaxCapacityError < StandardError; end
 
+  class ResponseTooLargeError < StandardError; end
+
   VERSION = File.read(File.join(__dir__, "../../VERSION")).strip
 
   # Autoload utility modules
@@ -42,6 +44,7 @@ module Sidekiq::AsyncHttp
 
   @processor = nil
   @configuration = nil
+  @testing = false
 
   class << self
     attr_writer :configuration, :processor
@@ -199,6 +202,16 @@ module Sidekiq::AsyncHttp
       @processor&.stop(timeout: 0)
       @processor = nil
       @configuration = nil
+    end
+
+    # @api private
+    def testing?
+      @testing
+    end
+
+    # @api private
+    def testing=(value)
+      @testing = !!value
     end
   end
 end

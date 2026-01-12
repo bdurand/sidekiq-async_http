@@ -95,16 +95,33 @@ module Sidekiq::AsyncHttp
       Sidekiq::Client.push(@sidekiq_job)
     end
 
-    # Called when the HTTP request succeeds
-    # @param response [Hash] response data
+    # Called with the HTTP response on a completed request.
+    #
+    # @param response [Sidekiq::AsyncHttp::Response] the HTTP response
     # @return [void]
-    def success(response)
+    def success!(response)
+      completed! unless completed_at
+
+      worker_class = ClassHelper.resolve_class_name(@success_worker)
+      raise "Success worker class not set" unless worker_class
+
+      worker_class.perform_async(response.to_h, *job_args)
     end
 
-    # Called when the HTTP request fails
-    # @param error [Error] error object
+    # Called with the HTTP error on a failed request.
+    #
+    # @param exception [Exception] the error that occurred
     # @return [void]
-    def error(error)
+    def error!(exception)
+      completed! unless completed_at
+
+      if @error_worker
+        error = Error.from_exception(exception, request_id: @id, duration: duration)
+        worker_class = ClassHelper.resolve_class_name(@error_worker)
+        worker_class.perform_async(error.to_h, *job_args)
+      else
+        retry_job
+      end
     end
   end
 end

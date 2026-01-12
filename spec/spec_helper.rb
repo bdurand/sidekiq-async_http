@@ -40,6 +40,8 @@ def test_web_server
   $test_web_server ||= TestWebServer.new # rubocop:disable Style/GlobalVars
 end
 
+Sidekiq::AsyncHttp.testing = true
+
 RSpec.configure do |config|
   config.disable_monkey_patching!
   config.default_formatter = "doc" if config.files_to_run.one? || ENV["RSPEC_FORMATTER"] == "doc"
@@ -67,7 +69,7 @@ RSpec.configure do |config|
   config.before do
     $mock_redis.flushdb # rubocop:disable Style/GlobalVars
     # Override Sidekiq.redis to use MockRedis for each test
-    allow(Sidekiq).to receive(:redis).and_yield($mock_redis)
+    allow(Sidekiq).to receive(:redis).and_yield($mock_redis) # rubocop:disable Style/GlobalVars
     Sidekiq::Worker.clear_all
   end
 
@@ -77,6 +79,13 @@ RSpec.configure do |config|
 
   config.before(:each, :integration) do
     test_web_server.start.ready?
+  end
+
+  config.around(:each, :disable_testing_mode) do |example|
+    Sidekiq::AsyncHttp.testing = false
+    example.run
+  ensure
+    Sidekiq::AsyncHttp.testing = true
   end
 
   config.after(:suite) do

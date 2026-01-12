@@ -5,30 +5,17 @@ module Sidekiq
     # Immutable error object representing an exception from an HTTP request
     class Error
       # Valid error types
-      ERROR_TYPES = %i[timeout connection ssl protocol unknown].freeze
+      ERROR_TYPES = %i[timeout connection ssl protocol response_too_large unknown].freeze
 
-      attr_reader :class_name, :message, :backtrace, :request_id, :error_type
+      attr_reader :class_name, :message, :backtrace, :request_id, :error_type, :duration
 
-      def initialize(class_name:, message:, backtrace:, request_id:, error_type:)
+      def initialize(class_name:, message:, backtrace:, request_id:, error_type:, duration:)
         @class_name = class_name
         @message = message
         @backtrace = backtrace
         @request_id = request_id
         @error_type = error_type
-        freeze
-      end
-
-      # Create a new Error with modified attributes (similar to Data#with)
-      # @param attributes [Hash] attributes to change
-      # @return [Error] new error object with modified attributes
-      def with(**attributes)
-        self.class.new(
-          class_name: attributes.fetch(:class_name, class_name),
-          message: attributes.fetch(:message, message),
-          backtrace: attributes.fetch(:backtrace, backtrace),
-          request_id: attributes.fetch(:request_id, request_id),
-          error_type: attributes.fetch(:error_type, error_type)
-        )
+        @duration = duration
       end
 
       # Create an Error from an exception using pattern matching
@@ -36,7 +23,7 @@ module Sidekiq
       # @param exception [Exception] the exception to convert
       # @param request_id [String] the request ID
       # @return [Error] the error object
-      def self.from_exception(exception, request_id:)
+      def self.from_exception(exception, request_id:, duration:)
         error_type = case exception
         in Async::TimeoutError
           :timeout
@@ -45,8 +32,10 @@ module Sidekiq
         in Errno::ECONNREFUSED | Errno::ECONNRESET | Errno::EHOSTUNREACH
           :connection
         else
-          # Check for protocol errors without requiring the constant
-          if exception.class.name&.include?("Protocol::Error")
+          # Check for specific error types by class name
+          if exception.is_a?(Sidekiq::AsyncHttp::ResponseTooLargeError)
+            :response_too_large
+          elsif exception.class.name&.include?("Protocol::Error")
             :protocol
           else
             :unknown
@@ -58,7 +47,8 @@ module Sidekiq
           message: exception.message,
           backtrace: exception.backtrace || [],
           request_id: request_id,
-          error_type: error_type
+          error_type: error_type,
+          duration: duration
         )
       end
 
@@ -70,7 +60,8 @@ module Sidekiq
           "message" => message,
           "backtrace" => backtrace,
           "request_id" => request_id,
-          "error_type" => error_type.to_s
+          "error_type" => error_type.to_s,
+          "duration" => duration
         }
       end
 
@@ -83,7 +74,8 @@ module Sidekiq
           message: hash["message"],
           backtrace: hash["backtrace"],
           request_id: hash["request_id"],
-          error_type: hash["error_type"]&.to_sym
+          error_type: hash["error_type"]&.to_sym,
+          duration: hash["duration"]
         )
       end
 
