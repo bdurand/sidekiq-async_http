@@ -782,7 +782,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       {
         "status" => 200,
         "headers" => {"content-type" => "application/json"},
-        "body" => '{"result":"ok"}',
+        "body" => {"encoding" => "text", "value" => '{"result":"ok"}'},
         "protocol" => "HTTP/2",
         "request_id" => "req-123",
         "url" => "https://api.example.com/users",

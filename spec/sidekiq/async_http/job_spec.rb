@@ -7,7 +7,7 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
     {
       "status" => 200,
       "headers" => {"Content-Type" => "application/json"},
-      "body" => '{"message":"success"}',
+      "body" => {"encoding" => "text", "value" => '{"message":"success"}'},
       "duration" => 0.123,
       "request_id" => "req-123",
       "url" => "https://api.example.com/users",

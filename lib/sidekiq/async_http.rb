@@ -30,17 +30,12 @@ module Sidekiq::AsyncHttp
   autoload :HttpHeaders, File.join(__dir__, "async_http/http_headers")
   autoload :Job, File.join(__dir__, "async_http/job")
   autoload :Metrics, File.join(__dir__, "async_http/metrics")
+  autoload :Payload, File.join(__dir__, "async_http/payload")
   autoload :Processor, File.join(__dir__, "async_http/processor")
   autoload :Request, File.join(__dir__, "async_http/request")
   autoload :RequestTask, File.join(__dir__, "async_http/request_task")
   autoload :Response, File.join(__dir__, "async_http/response")
   autoload :Stats, File.join(__dir__, "async_http/stats")
-
-  # Load Web UI extension if Sidekiq::Web is available
-  # This is done after all other requires to ensure dependencies are loaded
-  def self.load_web_ui
-    require_relative "async_http/web_ui" if defined?(Sidekiq::Web)
-  end
 
   @processor = nil
   @configuration = nil
@@ -69,6 +64,12 @@ module Sidekiq::AsyncHttp
     def reset_configuration!
       @configuration = nil
       configuration
+    end
+
+    # Load Web UI extension if Sidekiq::Web is available
+    # This is done after all other requires to ensure dependencies are loaded
+    def load_web_ui
+      require_relative "async_http/web_ui" if defined?(Sidekiq::Web)
     end
 
     # Check if the processor is running

@@ -36,29 +36,6 @@ module Sidekiq::AsyncHttp
       validate!
     end
 
-    # Validate the request has required HTTP parameters.
-    # @raise [ArgumentError] if method or url is invalid
-    # @return [self] for chaining
-    def validate!
-      unless VALID_METHODS.include?(@method)
-        raise ArgumentError, "method must be one of #{VALID_METHODS.inspect}, got: #{@method.inspect}"
-      end
-
-      if @url.nil? || (@url.is_a?(String) && @url.empty?)
-        raise ArgumentError, "url is required"
-      end
-
-      unless @url.is_a?(String) || @url.is_a?(URI::Generic)
-        raise ArgumentError, "url must be a String or URI, got: #{@url.class}"
-      end
-
-      if [:get, :delete].include?(@method) && !@body.nil?
-        raise ArgumentError, "body is not allowed for #{@method.upcase} requests"
-      end
-
-      self
-    end
-
     # Prepare the request for execution with callback workers.
     #
     # @param sidekiq_job [Hash, nil] Sidekiq job hash with "class" and "args" keys.
@@ -122,6 +99,31 @@ module Sidekiq::AsyncHttp
 
       # Return the request ID
       @id
+    end
+
+    private
+
+    # Validate the request has required HTTP parameters.
+    # @raise [ArgumentError] if method or url is invalid
+    # @return [self] for chaining
+    def validate!
+      unless VALID_METHODS.include?(@method)
+        raise ArgumentError, "method must be one of #{VALID_METHODS.inspect}, got: #{@method.inspect}"
+      end
+
+      if @url.nil? || (@url.is_a?(String) && @url.empty?)
+        raise ArgumentError, "url is required"
+      end
+
+      unless @url.is_a?(String) || @url.is_a?(URI::Generic)
+        raise ArgumentError, "url must be a String or URI, got: #{@url.class}"
+      end
+
+      if [:get, :delete].include?(@method) && !@body.nil?
+        raise ArgumentError, "body is not allowed for #{@method.upcase} requests"
+      end
+
+      self
     end
   end
 end

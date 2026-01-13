@@ -41,6 +41,21 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
 
       expect(response.headers.to_h).to eq({})
     end
+
+    it "handles nil body" do
+      response = described_class.new(
+        status: 204,
+        headers: {"Content-Length" => "0"},
+        body: nil,
+        duration: 0.02,
+        request_id: "no-body-456",
+        url: "https://example.com/empty",
+        method: :get,
+        protocol: "HTTP/1.1"
+      )
+
+      expect(response.body).to be_nil
+    end
   end
 
   describe "#success?" do
@@ -300,7 +315,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
       expect(hash).to eq({
         "status" => 201,
         "headers" => {"content-type" => "application/json", "x-request-id" => "abc"},
-        "body" => '{"created":true}',
+        "body" => {"encoding" => "text", "value" => '{"created":true}'},
         "duration" => 0.456,
         "request_id" => "req-123",
         "protocol" => "HTTP/2",
@@ -327,6 +342,23 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
         "status", "headers", "body", "duration", "request_id", "protocol", "url", "method"
       )
     end
+
+    it "handles nil body" do
+      response = described_class.new(
+        status: 204,
+        headers: {},
+        body: nil,
+        duration: 0.2,
+        request_id: "no-body",
+        url: "http://test.com/nobody",
+        method: :get,
+        protocol: "HTTP/1.1"
+      )
+
+      hash = response.to_h
+
+      expect(hash["body"]).to be_nil
+    end
   end
 
   describe ".from_h" do
@@ -334,7 +366,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
       hash = {
         "status" => 200,
         "headers" => {"Content-Type" => "text/html"},
-        "body" => "<html></html>",
+        "body" => {"encoding" => "text", "value" => "<html></html>"},
         "duration" => 0.25,
         "request_id" => "req-456",
         "protocol" => "HTTP/1.1",
@@ -377,6 +409,24 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
       expect(reconstructed.protocol).to eq(original.protocol)
       expect(reconstructed.url).to eq(original.url)
       expect(reconstructed.method).to eq(original.method)
+    end
+
+    it "supportss a nil body" do
+      hash = {
+        "status" => 204,
+        "headers" => {},
+        "body" => nil,
+        "duration" => 0.05,
+        "request_id" => "req-789",
+        "protocol" => "HTTP/1.1",
+        "url" => "https://example.com/empty",
+        "method" => "get"
+      }
+
+      response = described_class.from_h(hash)
+
+      expect(response.status).to eq(204)
+      expect(response.body).to be_nil
     end
   end
 end

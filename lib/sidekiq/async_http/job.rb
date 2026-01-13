@@ -2,9 +2,11 @@
 
 module Sidekiq::AsyncHttp
   module Job
-    def self.included(base)
-      base.include(Sidekiq::Job) unless base.include?(Sidekiq::Job)
-      base.extend(ClassMethods)
+    class << self
+      def included(base)
+        base.include(Sidekiq::Job) unless base.include?(Sidekiq::Job)
+        base.extend(ClassMethods)
+      end
     end
 
     module ClassMethods

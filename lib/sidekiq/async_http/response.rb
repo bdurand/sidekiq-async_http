@@ -2,16 +2,16 @@
 
 module Sidekiq
   module AsyncHttp
-    # Immutable response object representing an HTTP response
+    # HTTP response
     class Response
+      UNDEFINED = Object.new.freeze
+      private_constant :UNDEFINED
+
       # @return [Integer] HTTP status code
       attr_reader :status
 
       # @return [HttpHeaders] response headers
       attr_reader :headers
-
-      # @return [String] response body
-      attr_reader :body
 
       # @return [Float] request duration in seconds
       attr_reader :duration
@@ -28,6 +28,24 @@ module Sidekiq
       # @return [Symbol] HTTP method
       attr_reader :method
 
+      class << self
+        # Reconstruct a Response from a hash
+        # @param hash [Hash] hash representation
+        # @return [Response] reconstructed response
+        def from_h(hash)
+          new(
+            status: hash["status"],
+            headers: hash["headers"],
+            body: Payload.from_h(hash["body"])&.value,
+            protocol: hash["protocol"],
+            duration: hash["duration"],
+            request_id: hash["request_id"],
+            url: hash["url"],
+            method: hash["method"]&.to_sym
+          )
+        end
+      end
+
       # Initialize a Response from an Async::HTTP::Response
       #
       # @param duration [Float] request duration in seconds
@@ -37,13 +55,23 @@ module Sidekiq
       def initialize(status:, headers:, body:, duration:, request_id:, url:, method:, protocol:)
         @status = status
         @headers = HttpHeaders.new(headers)
-        @body = body
+
+        encoding, encoded_body = Payload.encode(body, @headers["content-type"])
+        @payload = Payload.new(encoding, encoded_body) unless body.nil?
+        @body = UNDEFINED
+
         @duration = duration
         @request_id = request_id
         @protocol = protocol
         @url = url
         @method = method
-        freeze
+      end
+
+      def body
+        if @body.equal?(UNDEFINED)
+          @body = @payload&.value
+        end
+        @body
       end
 
       # Check if response is successful (2xx status)
@@ -95,29 +123,13 @@ module Sidekiq
         {
           "status" => status,
           "headers" => headers.to_h,
-          "body" => body,
+          "body" => @payload&.to_h,
           "duration" => duration,
           "request_id" => request_id,
           "protocol" => protocol,
           "url" => url,
           "method" => method.to_s
         }
-      end
-
-      # Reconstruct a Response from a hash
-      # @param hash [Hash] hash representation
-      # @return [Response] reconstructed response
-      def self.from_h(hash)
-        new(
-          status: hash["status"],
-          headers: hash["headers"],
-          body: hash["body"],
-          protocol: hash["protocol"],
-          duration: hash["duration"],
-          request_id: hash["request_id"],
-          url: hash["url"],
-          method: hash["method"]&.to_sym
-        )
       end
     end
   end
