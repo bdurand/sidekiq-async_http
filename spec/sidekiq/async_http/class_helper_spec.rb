@@ -14,5 +14,10 @@ RSpec.describe Sidekiq::AsyncHttp::ClassHelper do
         described_class.resolve_class_name("NonExistent::ClassName")
       }.to raise_error(NameError)
     end
+
+    it "returns nil for nil or empty string" do
+      expect(described_class.resolve_class_name(nil)).to be_nil
+      expect(described_class.resolve_class_name("")).to be_nil
+    end
   end
 end

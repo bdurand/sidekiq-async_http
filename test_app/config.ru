@@ -76,12 +76,11 @@ map "/test" do
   run lambda { |env|
     request = Rack::Request.new(env)
     delay = request.params["delay"]&.to_f
-    sleep([delay, 10.0].min) if delay && delay > 0
 
     [
       200,
-      {"Content-Type" => "application/json; charset=utf-8"},
-      [JSON.generate({status: "ok", delay: delay})]
+      {"Content-Type" => "text/plain; charset=utf-8"},
+      TestAppStreamingBody.new(delay)
     ]
   }
 end
@@ -111,4 +110,16 @@ end
 
 def method_not_allowed_response
   [405, {"Content-Type" => "text/plain"}, ["Method Not Allowed"]]
+end
+
+class TestAppStreamingBody
+  def initialize(delay)
+    @delay = delay
+  end
+
+  def each
+    yield "start..."
+    sleep(@delay) if @delay > 0
+    yield "end"
+  end
 end

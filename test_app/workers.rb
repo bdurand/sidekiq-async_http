@@ -7,12 +7,16 @@ class ExampleWorker
   sidekiq_options retry: 1
 
   success_callback do |response, method, url, timeout, delay|
+    Sidekiq.logger.info("Request succeeded: #{method.upcase} #{url} - Status: #{response.status}")
+
     Sidekiq.redis do |conn|
       conn.incr("example_worker_success")
     end
   end
 
   error_callback do |error, method, url, timeout, delay|
+    Sidekiq.logger.error("Request failed: #{method.upcase} #{url} - Error: #{error.message}")
+
     Sidekiq.redis do |conn|
       conn.incr("example_worker_error")
     end
