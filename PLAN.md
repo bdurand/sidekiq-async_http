@@ -1055,21 +1055,20 @@ which reuses underlying connections automatically.
          - Contributing guidelines
          - License
 
-[ ] 10.2 Add YARD documentation:
+[x] 10.2 Add YARD documentation:
          - Document all public classes and methods
          - Add @example tags for common usage
          - Add @param and @return tags
          - Add @raise tags for exceptions
          - Generate docs and verify formatting
 
-[ ] 10.3 Add GitHub Actions CI workflow (.github/workflows/ci.yml):
+[x] 10.3 Add GitHub Actions CI workflow (.github/workflows/ci.yml):
          - Matrix: Ruby 3.2, 3.3, 3.4
          - Steps:
            - Checkout
            - Setup Ruby with bundler cache
            - Run `bundle exec standardrb`
            - Run `bundle exec rspec`
-           - Upload coverage to CodeCov (on success)
          - Run on push and pull_request
 
 [ ] 10.4 Final review checklist:
