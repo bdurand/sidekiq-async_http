@@ -128,21 +128,4 @@ RSpec.describe "Sidekiq server lifecycle hooks" do
       expect(Sidekiq::AsyncHttp.processor).to be_nil
     end
   end
-
-  describe "sidekiq.rb file behavior" do
-    it "properly configures hooks when loaded in server mode" do
-      # This test verifies the file structure is correct, even though we can't
-      # actually test it loading in server mode within this test environment
-      sidekiq_file = File.read(File.expand_path("../../../lib/sidekiq/async_http/sidekiq.rb", __dir__))
-
-      # Verify the file contains the expected configuration block
-      expect(sidekiq_file).to include("Sidekiq.configure_server")
-      expect(sidekiq_file).to include("config.on(:startup)")
-      expect(sidekiq_file).to include("Sidekiq::AsyncHttp.start")
-      expect(sidekiq_file).to include("config.on(:quiet)")
-      expect(sidekiq_file).to include("Sidekiq::AsyncHttp.quiet")
-      expect(sidekiq_file).to include("config.on(:shutdown)")
-      expect(sidekiq_file).to include("Sidekiq::AsyncHttp.stop")
-    end
-  end
 end

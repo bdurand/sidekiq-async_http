@@ -1149,7 +1149,6 @@ which reuses underlying connections automatically.
               config.on(:quiet) { Sidekiq::AsyncHttp.quiet }
               config.on(:shutdown) { Sidekiq::AsyncHttp.stop }
             end
-        - User just needs to require "sidekiq-async_http/sidekiq" in initializer
         - Document in README
         - Write integration specs verifying hooks are registered
 ```
@@ -1307,8 +1306,6 @@ which reuses underlying connections automatically.
 ### Configuration (config/initializers/sidekiq-async_http.rb)
 
 ```ruby
-require "sidekiq-async_http/sidekiq"
-
 Sidekiq::AsyncHttp.configure do |config|
   config.max_connections = 256
   config.default_request_timeout = 60

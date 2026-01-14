@@ -230,3 +230,5 @@ module Sidekiq::AsyncHttp
     end
   end
 end
+
+require_relative "async_http/sidekiq"
