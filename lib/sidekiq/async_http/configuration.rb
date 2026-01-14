@@ -106,7 +106,8 @@ module Sidekiq
           "shutdown_timeout" => shutdown_timeout,
           "logger" => logger,
           "dns_cache_ttl" => dns_cache_ttl,
-          "max_response_size" => max_response_size
+          "max_response_size" => max_response_size,
+          "user_agent" => user_agent
         }
       end
 

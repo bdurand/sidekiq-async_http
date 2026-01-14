@@ -1533,6 +1533,8 @@ metrics = Sidekiq::AsyncHttp.metrics.to_h
 [ ] **Continuation Job Identification**
       - Automatically tag job options with type of job (error or completion)
       - Provide method to add block to Context middleware that triggers on job type from sidekiq_options metadata
+      - Callbacks are called by Sidekiq server middlware when continuation jobs are processed
+      - This feature is intended to provide spot for hooks for custom metrics etc.
 
 ## Future Enhancements
 

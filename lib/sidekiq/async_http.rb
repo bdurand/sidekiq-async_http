@@ -38,6 +38,7 @@ module Sidekiq::AsyncHttp
   autoload :Client, File.join(__dir__, "async_http/client")
   autoload :Configuration, File.join(__dir__, "async_http/configuration")
   autoload :Context, File.join(__dir__, "async_http/context")
+  autoload :ContinuationMiddleware, File.join(__dir__, "async_http/continuation_middleware")
   autoload :Error, File.join(__dir__, "async_http/error")
   autoload :HttpHeaders, File.join(__dir__, "async_http/http_headers")
   autoload :Job, File.join(__dir__, "async_http/job")
@@ -52,6 +53,8 @@ module Sidekiq::AsyncHttp
 
   @processor = nil
   @configuration = nil
+  @after_completion_callbacks = []
+  @after_error_callbacks = []
   @testing = false
 
   class << self
@@ -79,6 +82,22 @@ module Sidekiq::AsyncHttp
       configuration
     end
 
+    # Add a callback to be executed after a successful request completion.
+    #
+    # @yield [response] block to execute after an HTTP request completes
+    # @yieldparam response [Response] the HTTP response
+    def after_completion(&block)
+      @after_completion_callbacks << block
+    end
+
+    # Add a callback to be executed after a request error.
+    #
+    # @yield [error] block to execute after an HTTP request errors
+    # @yieldparam error [Error] information about the error that was raised
+    def after_error(&block)
+      @after_error_callbacks << block
+    end
+
     # Load Web UI extension if Sidekiq::Web is available
     # This is done after all other requires to ensure dependencies are loaded
     #
@@ -103,10 +122,6 @@ module Sidekiq::AsyncHttp
 
     def stopped?
       @processor.nil? || @processor.stopped?
-    end
-
-    def initialize!
-      SidekiqLifecycleHooks.register
     end
 
     # Main public API: enqueue an async HTTP request
@@ -213,6 +228,30 @@ module Sidekiq::AsyncHttp
       @configuration = nil
     end
 
+    # Invoke the registered completion callbacks
+    #
+    # @param response [Hash] the HTTP response
+    # @return [void]
+    # @api private
+    def invoke_completion_callbacks(response_hash)
+      response = Response.from_h(response_hash)
+      @after_completion_callbacks.each do |callback|
+        callback.call(response)
+      end
+    end
+
+    # Invoke the registered error callbacks
+    #
+    # @param error_hash [Hash] information about the error that was raised
+    # @return [void]
+    # @api private
+    def invoke_error_callbacks(error_hash)
+      error = Error.from_h(error_hash)
+      @after_error_callbacks.each do |callback|
+        callback.call(error)
+      end
+    end
+
     # @api private
     def testing?
       @testing
@@ -236,4 +275,4 @@ module Sidekiq::AsyncHttp
   end
 end
 
-Sidekiq::AsyncHttp.initialize!
+Sidekiq::AsyncHttp::SidekiqLifecycleHooks.register

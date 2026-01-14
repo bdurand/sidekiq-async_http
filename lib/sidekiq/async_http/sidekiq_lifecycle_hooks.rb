@@ -20,6 +20,7 @@ module Sidekiq::AsyncHttp
         Sidekiq.configure_server do |config|
           config.server_middleware do |chain|
             chain.add Sidekiq::AsyncHttp::Context::Middleware
+            chain.add Sidekiq::AsyncHttp::ContinuationMiddleware
           end
 
           config.on(:startup) do

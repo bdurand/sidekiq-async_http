@@ -317,4 +317,221 @@ RSpec.describe Sidekiq::AsyncHttp do
       expect(second_processor).to be_running
     end
   end
+
+  describe "callbacks" do
+    let(:response_data) do
+      {
+        "status" => 200,
+        "headers" => {"Content-Type" => "application/json"},
+        "body" => {"encoding" => "text", "value" => '{"message":"success"}'},
+        "duration" => 0.123,
+        "request_id" => "req-123",
+        "url" => "https://api.example.com/users",
+        "method" => "get",
+        "protocol" => "HTTP/2"
+      }
+    end
+
+    let(:error_data) do
+      {
+        "class_name" => "Timeout::Error",
+        "message" => "Request timed out",
+        "backtrace" => ["line 1", "line 2", "line 3"],
+        "error_type" => "timeout",
+        "duration" => 0.5,
+        "request_id" => "req-456",
+        "url" => "https://api.example.com/slow",
+        "method" => "post"
+      }
+    end
+
+    describe ".after_completion" do
+      after do
+        described_class.instance_variable_set(:@after_completion_callbacks, [])
+      end
+
+      it "registers a callback block" do
+        block_called = false
+        described_class.after_completion do |response|
+          block_called = true
+        end
+
+        callbacks = described_class.instance_variable_get(:@after_completion_callbacks)
+        expect(callbacks.size).to eq(1)
+      end
+
+      it "allows registering multiple callbacks" do
+        described_class.after_completion { |response| }
+        described_class.after_completion { |response| }
+        described_class.after_completion { |response| }
+
+        callbacks = described_class.instance_variable_get(:@after_completion_callbacks)
+        expect(callbacks.size).to eq(3)
+      end
+    end
+
+    describe ".after_error" do
+      after do
+        described_class.instance_variable_set(:@after_error_callbacks, [])
+      end
+
+      it "registers a callback block" do
+        block_called = false
+        described_class.after_error do |error|
+          block_called = true
+        end
+
+        callbacks = described_class.instance_variable_get(:@after_error_callbacks)
+        expect(callbacks.size).to eq(1)
+      end
+
+      it "allows registering multiple callbacks" do
+        described_class.after_error { |error| }
+        described_class.after_error { |error| }
+        described_class.after_error { |error| }
+
+        callbacks = described_class.instance_variable_get(:@after_error_callbacks)
+        expect(callbacks.size).to eq(3)
+      end
+    end
+
+    describe ".invoke_completion_callbacks" do
+      after do
+        described_class.instance_variable_set(:@after_completion_callbacks, [])
+      end
+
+      it "invokes all registered completion callbacks with a Response object" do
+        responses = []
+
+        described_class.after_completion do |response|
+          responses << response
+        end
+
+        described_class.after_completion do |response|
+          responses << response
+        end
+
+        described_class.invoke_completion_callbacks(response_data)
+
+        expect(responses.size).to eq(2)
+        expect(responses.first).to be_a(Sidekiq::AsyncHttp::Response)
+        expect(responses.first.status).to eq(200)
+        expect(responses.first.url).to eq("https://api.example.com/users")
+        expect(responses.first.method).to eq(:get)
+        expect(responses.first.request_id).to eq("req-123")
+      end
+
+      it "converts hash to Response object before invoking callbacks" do
+        response_received = nil
+
+        described_class.after_completion do |response|
+          response_received = response
+        end
+
+        described_class.invoke_completion_callbacks(response_data)
+
+        expect(response_received).to be_a(Sidekiq::AsyncHttp::Response)
+        expect(response_received.status).to eq(200)
+        expect(response_received.headers["Content-Type"]).to eq("application/json")
+        expect(response_received.body).to eq('{"message":"success"}')
+        expect(response_received.duration).to eq(0.123)
+      end
+
+      it "invokes callbacks in registration order" do
+        call_order = []
+
+        described_class.after_completion do |response|
+          call_order << :first
+        end
+
+        described_class.after_completion do |response|
+          call_order << :second
+        end
+
+        described_class.after_completion do |response|
+          call_order << :third
+        end
+
+        described_class.invoke_completion_callbacks(response_data)
+
+        expect(call_order).to eq([:first, :second, :third])
+      end
+
+      it "does nothing when no callbacks are registered" do
+        expect do
+          described_class.invoke_completion_callbacks(response_data)
+        end.not_to raise_error
+      end
+    end
+
+    describe ".invoke_error_callbacks" do
+      after do
+        described_class.instance_variable_set(:@after_error_callbacks, [])
+      end
+
+      it "invokes all registered error callbacks with an Error object" do
+        errors = []
+
+        described_class.after_error do |error|
+          errors << error
+        end
+
+        described_class.after_error do |error|
+          errors << error
+        end
+
+        described_class.invoke_error_callbacks(error_data)
+
+        expect(errors.size).to eq(2)
+        expect(errors.first).to be_a(Sidekiq::AsyncHttp::Error)
+        expect(errors.first.class_name).to eq("Timeout::Error")
+        expect(errors.first.message).to eq("Request timed out")
+        expect(errors.first.error_type).to eq(:timeout)
+        expect(errors.first.request_id).to eq("req-456")
+      end
+
+      it "converts hash to Error object before invoking callbacks" do
+        error_received = nil
+
+        described_class.after_error do |error|
+          error_received = error
+        end
+
+        described_class.invoke_error_callbacks(error_data)
+
+        expect(error_received).to be_a(Sidekiq::AsyncHttp::Error)
+        expect(error_received.class_name).to eq("Timeout::Error")
+        expect(error_received.message).to eq("Request timed out")
+        expect(error_received.backtrace).to eq(["line 1", "line 2", "line 3"])
+        expect(error_received.url).to eq("https://api.example.com/slow")
+        expect(error_received.method).to eq(:post)
+      end
+
+      it "invokes callbacks in registration order" do
+        call_order = []
+
+        described_class.after_error do |error|
+          call_order << :first
+        end
+
+        described_class.after_error do |error|
+          call_order << :second
+        end
+
+        described_class.after_error do |error|
+          call_order << :third
+        end
+
+        described_class.invoke_error_callbacks(error_data)
+
+        expect(call_order).to eq([:first, :second, :third])
+      end
+
+      it "does nothing when no callbacks are registered" do
+        expect do
+          described_class.invoke_error_callbacks(error_data)
+        end.not_to raise_error
+      end
+    end
+  end
 end
