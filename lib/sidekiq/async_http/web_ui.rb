@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "time"
+require "sidekiq/web"
 
 module Sidekiq
   module AsyncHttp
@@ -70,7 +71,7 @@ module Sidekiq
               current_inflight: stats.get_total_inflight,
               max_capacity: stats.get_total_max_connections,
               processes: processes,
-              timestamp: Time.now.iso8601
+              timestamp: Time.now.utc.iso8601
             }
 
             json(response)

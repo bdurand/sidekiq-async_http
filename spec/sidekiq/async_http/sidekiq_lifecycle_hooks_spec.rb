@@ -2,7 +2,7 @@
 
 require "spec_helper"
 
-RSpec.describe "Sidekiq server lifecycle hooks" do
+RSpec.describe Sidekiq::AsyncHttp::SidekiqLifecycleHooks do
   # Save original Sidekiq configuration
   let(:original_lifecycle_events) do
     Sidekiq.default_configuration.instance_variable_get(:@options)[:lifecycle_events].dup

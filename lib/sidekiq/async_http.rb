@@ -47,6 +47,7 @@ module Sidekiq::AsyncHttp
   autoload :Request, File.join(__dir__, "async_http/request")
   autoload :RequestTask, File.join(__dir__, "async_http/request_task")
   autoload :Response, File.join(__dir__, "async_http/response")
+  autoload :SidekiqLifecycleHooks, File.join(__dir__, "async_http/sidekiq_lifecycle_hooks")
   autoload :Stats, File.join(__dir__, "async_http/stats")
 
   @processor = nil
@@ -83,7 +84,7 @@ module Sidekiq::AsyncHttp
     #
     # @return [void]
     def load_web_ui
-      require_relative "async_http/web_ui" if defined?(Sidekiq::Web)
+      require_relative "async_http/web_ui"
     end
 
     # Check if the processor is running
@@ -104,15 +105,8 @@ module Sidekiq::AsyncHttp
       @processor.nil? || @processor.stopped?
     end
 
-    # Returns the processor instance (internal accessor)
-    # @return [Processor, nil]
-    # @api private
-    attr_reader :processor
-
-    # Returns the metrics from the processor
-    # @return [Metrics, nil]
-    def metrics
-      processor&.metrics
+    def initialize!
+      SidekiqLifecycleHooks.register
     end
 
     # Main public API: enqueue an async HTTP request
@@ -228,7 +222,18 @@ module Sidekiq::AsyncHttp
     def testing=(value)
       @testing = !!value
     end
+
+    # Returns the processor instance (internal accessor)
+    # @return [Processor, nil]
+    # @api private
+    attr_reader :processor
+
+    # Returns the metrics from the processor
+    # @return [Metrics, nil]
+    def metrics
+      processor&.metrics
+    end
   end
 end
 
-require_relative "async_http/sidekiq"
+Sidekiq::AsyncHttp.initialize!

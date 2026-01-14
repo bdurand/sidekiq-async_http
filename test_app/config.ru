@@ -1,25 +1,20 @@
 # frozen_string_literal: true
 
 require "bundler/setup"
-require "sidekiq"
-require "sidekiq/web"
-require "securerandom"
 require "rack/session"
-require_relative "../lib/sidekiq-async_http"
 
-# Load the Web UI extension after Sidekiq::Web is available
 Sidekiq::AsyncHttp.load_web_ui
 
 # Redis URL from environment or default to localhost
-REDIS_URL = ENV.fetch("REDIS_URL", "redis://localhost:6379/0")
+redis_url = ENV.fetch("REDIS_URL", "redis://localhost:6379/0")
 
 # Configure Sidekiq to use Valkey from docker-compose
 Sidekiq.configure_server do |config|
-  config.redis = {url: REDIS_URL}
+  config.redis = {url: redis_url}
 end
 
 Sidekiq.configure_client do |config|
-  config.redis = {url: REDIS_URL}
+  config.redis = {url: redis_url}
 end
 
 # Load test workers
