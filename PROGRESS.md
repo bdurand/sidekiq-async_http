@@ -1,6 +1,42 @@
 # Development Progress
 
-## Latest Update: Documented Singleton Processor Pattern - January 14, 2026
+## Latest Update: Comprehensive README Documentation - January 14, 2026
+
+### Wrote comprehensive README.md (Step 10.1)
+- **Replaced placeholder README** with complete documentation covering all required topics
+- **Content Added**:
+  - **Badges**: CI status, code style, gem version (corrected URLs to sidekiq-async_http)
+  - **Overview and Motivation**: Clear ASCII diagrams showing the problem and solution
+  - **Quick Start Guide**: Minimal example with Job mixin and callbacks
+  - **Usage Patterns**:
+    - Using the Job mixin (recommended approach)
+    - Making different types of requests (GET, POST with JSON)
+    - Using separate callback workers for complex workflows
+    - Using the Client directly for maximum control
+  - **Response Object Reference**: All attributes and status helper methods
+  - **Error Object Reference**: All attributes including error_type categories
+  - **Configuration Section**: Complete code example with all options
+  - **Configuration Reference Table**: All 10 options with defaults and descriptions
+  - **Metrics and Monitoring**:
+    - Accessing in-memory metrics
+    - Redis-backed aggregate statistics
+    - Web UI integration
+    - Callbacks for custom monitoring (StatsD, Sentry examples)
+  - **Shutdown Behavior**: Lifecycle integration and incomplete request handling
+  - **Crash Recovery**: Heartbeat tracking and orphan detection explanation
+  - **Connection Pooling and Tuning**: How async-http works plus three tuning examples
+  - **System Requirements**:
+    - File descriptor limits with commands to check/increase
+    - Memory usage calculations and guidance
+  - **Troubleshooting Section**: 8 common issues with symptoms, causes, and solutions
+  - **Testing Section**: Inline mode example and mocking guidance
+  - **Contributing and License**: Updated GitHub URLs
+
+**Files Modified**: [README.md](README.md)
+
+---
+
+## Previous Update: Documented Singleton Processor Pattern - January 14, 2026
 
 ### Added comprehensive documentation for singleton design pattern
 - **Location**: [lib/sidekiq/async_http.rb](lib/sidekiq/async_http.rb) main module documentation

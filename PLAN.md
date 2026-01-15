@@ -1254,8 +1254,8 @@ which reuses underlying connections automatically.
 ### Phase 10: Documentation & Polish
 
 ```
-[ ] 10.1 Write comprehensive README.md:
-         - Badges (CI status, gem version, coverage)
+[x] 10.1 Write comprehensive README.md:
+         - Badges (CI status, gem version)
          - Overview and motivation
          - Usage section
             - Quick start guide with minimal example
@@ -1269,9 +1269,9 @@ which reuses underlying connections automatically.
             - Connection pooling and tuning guide
             - System requirements (file descriptors, etc.)
             - Troubleshooting section
-         - Installation instructions
-         - Contributing guidelines
-         - License
+         - Installation instructions (done)
+         - Contributing guidelines (done)
+         - License (done)
 
 [x] 10.2 Add YARD documentation:
          - Document all public classes and methods
