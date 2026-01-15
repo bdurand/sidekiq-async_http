@@ -18,12 +18,16 @@ module Sidekiq
       REACTOR_SLEEP = 0.01           # Seconds to sleep when queue is empty
       INFLIGHT_UPDATE_INTERVAL = 5   # Seconds between inflight stats updates
       SHUTDOWN_POLL_INTERVAL = 0.001 # Seconds to sleep while polling during shutdown
+      MONITOR_SLEEP = 0.1            # Seconds to sleep between monitor thread checks
 
       # @return [Configuration] the configuration object for the processor
       attr_reader :config
 
       # @return [Metrics] the metrics maintained by the processor
       attr_reader :metrics
+
+      # @return [InflightRegistry] the inflight request registry
+      attr_reader :inflight_registry
 
       # Callback to invoke after each request. Only available in testing mode.
       # @api private
@@ -37,9 +41,11 @@ module Sidekiq
       def initialize(config = nil)
         @config = config || Sidekiq::AsyncHttp.configuration
         @metrics = Metrics.new
+        @inflight_registry = InflightRegistry.new(@config)
         @queue = Thread::Queue.new
         @state = Concurrent::AtomicReference.new(:stopped)
         @reactor_thread = nil
+        @monitor_thread = nil
         @shutdown_barrier = Concurrent::Event.new
         @reactor_ready = Concurrent::Event.new
         @inflight_requests = Concurrent::Hash.new
@@ -70,6 +76,16 @@ module Sidekiq
           raise if AsyncHttp.testing?
         ensure
           @state.set(:stopped) if @reactor_thread == Thread.current
+        end
+
+        @monitor_thread = Thread.new do
+          Thread.current.name = "async-http-monitor"
+          run_monitor
+        rescue => e
+          # Log error but don't crash
+          @config.logger&.error("[Sidekiq::AsyncHttp] Monitor error: #{e.message}\n#{e.backtrace.join("\n")}")
+
+          raise if AsyncHttp.testing?
         end
 
         # Block until the reactor is ready
@@ -134,6 +150,11 @@ module Sidekiq
         @reactor_thread.join(1) if @reactor_thread&.alive?
         @reactor_thread.kill if @reactor_thread&.alive?
         @reactor_thread = nil
+
+        # Stop the monitor thread
+        @monitor_thread.join(1) if @monitor_thread&.alive?
+        @monitor_thread.kill if @monitor_thread&.alive?
+        @monitor_thread = nil
       end
 
       # Drain the processor (stop accepting new requests).
@@ -341,6 +362,9 @@ module Sidekiq
           @inflight_requests[task.id] = task
         end
 
+        # Register in Redis for crash recovery
+        @inflight_registry.register(task)
+
         # Mark task as started
         task.started!
 
@@ -524,6 +548,9 @@ module Sidekiq
 
         task.success!(response)
 
+        # Unregister from Redis after successful callback enqueue
+        @inflight_registry.unregister(task.id)
+
         @config.logger&.debug(
           "[Sidekiq::AsyncHttp] Request #{task.id} succeeded with status #{response.status}, " \
           "enqueued #{task.completion_worker}"
@@ -544,6 +571,9 @@ module Sidekiq
 
         task.error!(exception)
 
+        # Unregister from Redis after error callback enqueue
+        @inflight_registry.unregister(task.id)
+
         @config.logger&.warn(
           "[Sidekiq::AsyncHttp] Request #{task.id} failed with #{exception.class.name}: #{exception.message}, " \
           "enqueued #{task.error_worker}"
@@ -553,6 +583,78 @@ module Sidekiq
         @config.logger&.error(
           "[Sidekiq::AsyncHttp] Failed to enqueue error worker for request #{task.id}: #{e.class} - #{e.message}"
         )
+        raise if AsyncHttp.testing?
+      end
+
+      # Run the monitor thread for heartbeat updates and orphan detection.
+      #
+      # @return [void]
+      def run_monitor
+        @config.logger&.info("[Sidekiq::AsyncHttp] Monitor thread started")
+
+        last_heartbeat_update = monotonic_time - @config.heartbeat_interval
+        last_gc_attempt = monotonic_time - @config.heartbeat_interval
+
+        loop do
+          break if stopping? || stopped?
+
+          current_time = monotonic_time
+
+          # Update heartbeats for all inflight requests
+          if current_time - last_heartbeat_update >= @config.heartbeat_interval
+            update_heartbeats
+            last_heartbeat_update = current_time
+          end
+
+          # Attempt garbage collection
+          if current_time - last_gc_attempt >= @config.heartbeat_interval
+            attempt_garbage_collection
+            last_gc_attempt = current_time
+          end
+
+          sleep(MONITOR_SLEEP)
+        end
+
+        @config.logger&.info("[Sidekiq::AsyncHttp] Monitor thread stopped")
+      end
+
+      # Update heartbeats for all inflight requests.
+      #
+      # @return [void]
+      def update_heartbeats
+        request_ids = []
+        @tasks_lock.synchronize do
+          request_ids = @inflight_requests.keys
+        end
+
+        return if request_ids.empty?
+
+        @inflight_registry.update_heartbeats(request_ids)
+
+        @config.logger&.debug("[Sidekiq::AsyncHttp] Updated heartbeats for #{request_ids.size} inflight requests")
+      rescue => e
+        @config.logger&.error("[Sidekiq::AsyncHttp] Failed to update heartbeats: #{e.class} - #{e.message}")
+        raise if AsyncHttp.testing?
+      end
+
+      # Attempt to acquire GC lock and clean up orphaned requests.
+      #
+      # @return [void]
+      def attempt_garbage_collection
+        # Try to acquire the distributed lock
+        return unless @inflight_registry.acquire_gc_lock
+
+        begin
+          count = @inflight_registry.cleanup_orphaned_requests(@config.orphan_threshold, @config.logger)
+
+          if count > 0
+            @config.logger&.info("[Sidekiq::AsyncHttp] Garbage collection: re-enqueued #{count} orphaned requests")
+          end
+        ensure
+          @inflight_registry.release_gc_lock
+        end
+      rescue => e
+        @config.logger&.error("[Sidekiq::AsyncHttp] Garbage collection failed: #{e.class} - #{e.message}")
         raise if AsyncHttp.testing?
       end
     end

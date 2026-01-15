@@ -126,6 +126,28 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
         )
       end
     end
+
+    context "with invalid heartbeat_interval and orphan_threshold relationship" do
+      it "raises ArgumentError when heartbeat_interval >= orphan_threshold" do
+        expect { described_class.new(heartbeat_interval: 300, orphan_threshold: 300) }.to raise_error(
+          ArgumentError,
+          "heartbeat_interval (300) must be less than orphan_threshold (300)"
+        )
+      end
+
+      it "raises ArgumentError when heartbeat_interval > orphan_threshold" do
+        expect { described_class.new(heartbeat_interval: 400, orphan_threshold: 300) }.to raise_error(
+          ArgumentError,
+          "heartbeat_interval (400) must be less than orphan_threshold (300)"
+        )
+      end
+
+      it "allows heartbeat_interval < orphan_threshold" do
+        expect {
+          described_class.new(heartbeat_interval: 60, orphan_threshold: 300)
+        }.not_to raise_error
+      end
+    end
   end
 
   describe "#logger" do

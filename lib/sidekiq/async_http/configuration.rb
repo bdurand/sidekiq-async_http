@@ -25,6 +25,12 @@ module Sidekiq
       # @return [Integer] Maximum response size in bytes
       attr_reader :max_response_size
 
+      # @return [Integer] Heartbeat update interval in seconds
+      attr_reader :heartbeat_interval
+
+      # @return [Integer] Orphan detection threshold in seconds
+      attr_reader :orphan_threshold
+
       # @return [String, nil] Default User-Agent header value
       attr_accessor :user_agent
 
@@ -37,6 +43,8 @@ module Sidekiq
       # @param logger [Logger, nil] Logger instance to use
       # @param dns_cache_ttl [Integer] DNS cache TTL in seconds
       # @param max_response_size [Integer] Maximum response size in bytes
+      # @param heartbeat_interval [Integer] Interval for updating inflight request heartbeats in seconds
+      # @param orphan_threshold [Integer] Age threshold for detecting orphaned requests in seconds
       # @param user_agent [String, nil] Default User-Agent header value
       def initialize(
         max_connections: 256,
@@ -46,6 +54,8 @@ module Sidekiq
         logger: nil,
         dns_cache_ttl: 300,
         max_response_size: 10 * 1024 * 1024,
+        heartbeat_interval: 60,
+        orphan_threshold: 300,
         user_agent: nil
       )
         self.max_connections = max_connections
@@ -55,6 +65,8 @@ module Sidekiq
         self.logger = logger
         self.dns_cache_ttl = dns_cache_ttl
         self.max_response_size = max_response_size
+        self.heartbeat_interval = heartbeat_interval
+        self.orphan_threshold = orphan_threshold
         self.user_agent = user_agent
       end
 
@@ -96,6 +108,18 @@ module Sidekiq
         @max_response_size = value
       end
 
+      def heartbeat_interval=(value)
+        validate_positive(:heartbeat_interval, value)
+        @heartbeat_interval = value
+        validate_heartbeat_and_threshold
+      end
+
+      def orphan_threshold=(value)
+        validate_positive(:orphan_threshold, value)
+        @orphan_threshold = value
+        validate_heartbeat_and_threshold
+      end
+
       # Convert to hash for inspection
       # @return [Hash] hash representation with string keys
       def to_h
@@ -107,6 +131,8 @@ module Sidekiq
           "logger" => logger,
           "dns_cache_ttl" => dns_cache_ttl,
           "max_response_size" => max_response_size,
+          "heartbeat_interval" => heartbeat_interval,
+          "orphan_threshold" => orphan_threshold,
           "user_agent" => user_agent
         }
       end
@@ -116,6 +142,14 @@ module Sidekiq
       def validate_positive(attribute, value)
         unless value.is_a?(Numeric) && value > 0
           raise ArgumentError, "#{attribute} must be a positive number, got: #{value.inspect}"
+        end
+      end
+
+      def validate_heartbeat_and_threshold
+        return unless @heartbeat_interval && @orphan_threshold
+
+        if @heartbeat_interval >= @orphan_threshold
+          raise ArgumentError, "heartbeat_interval (#{@heartbeat_interval}) must be less than orphan_threshold (#{@orphan_threshold})"
         end
       end
     end
