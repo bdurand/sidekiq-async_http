@@ -58,11 +58,11 @@ sequenceDiagram
     Processor->>Processor: Fiber reactor<br/>dequeues request
     Processor->>Processor: Execute HTTP request<br/>(non-blocking)
 
-    alt HTTP Success
+    alt HTTP Request Completes
         Processor->>Sidekiq: Enqueue success callback
         Sidekiq->>Callback: Execute on_completion
         Callback->>Callback: Process response
-    else HTTP Error
+    else Error Raised
         Processor->>Sidekiq: Enqueue error callback
         Sidekiq->>Callback: Execute on_error
         Callback->>Callback: Handle error
@@ -138,12 +138,12 @@ Each Sidekiq process runs:
 ┌─────────────────────────────────────────────────────────────┐
 │                    Sidekiq Process                          │
 │                                                             │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ Worker       │  │ Worker       │  │ Worker       │      │
-│  │ Thread 1     │  │ Thread 2     │  │ Thread N     │      │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
-│         │                  │                  │             │
-│         └──────────────────┼──────────────────┘             │
+│  ┌──────────────┐   ┌──────────────┐  ┌──────────────┐      │
+│  │ Worker       │   │ Worker       │  │ Worker       │      │
+│  │ Thread 1     │   │ Thread 2     │  │ Thread N     │      │
+│  └──────┬───────┘   └──────┬───────┘  └──────┬───────┘      │
+│         │                  │                 │              │
+│         └──────────────────┼─────────────────┘              │
 │                            │                                │
 │                            ▼                                │
 │               ┌─────────────────────────┐                   │
