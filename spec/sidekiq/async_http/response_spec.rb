@@ -411,7 +411,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
       expect(reconstructed.method).to eq(original.method)
     end
 
-    it "supportss a nil body" do
+    it "supports a nil body" do
       hash = {
         "status" => 204,
         "headers" => {},
