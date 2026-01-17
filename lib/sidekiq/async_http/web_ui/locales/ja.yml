@@ -17,3 +17,5 @@ ja:
   async_http.inflight: "処理中"
   async_http.utilization: "使用率"
   async_http.no_active_processes: "アクティブなプロセスはありません"
+  async_http.clear_stats: "Clear Statistics"
+  async_http.clear_confirm: "Are you sure you want to clear all statistics? This cannot be undone."

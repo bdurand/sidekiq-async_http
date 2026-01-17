@@ -17,3 +17,5 @@ it:
   async_http.inflight: "In corso"
   async_http.utilization: "Utilizzo"
   async_http.no_active_processes: "Nessun processo attivo"
+  async_http.clear_stats: "Clear Statistics"
+  async_http.clear_confirm: "Are you sure you want to clear all statistics? This cannot be undone."

@@ -17,3 +17,5 @@ pt-BR:
   async_http.inflight: "Em Andamento"
   async_http.utilization: "Utilização"
   async_http.no_active_processes: "Nenhum processo ativo"
+  async_http.clear_stats: "Clear Statistics"
+  async_http.clear_confirm: "Are you sure you want to clear all statistics? This cannot be undone."

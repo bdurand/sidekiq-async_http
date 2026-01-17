@@ -13,8 +13,28 @@
 }
 
 .async-http-dashboard .section {
-  padding: var(--space-lg, 1.5rem);
+  margin-top: 1.5rem;
   background: var(--async-http-bg);
+}
+
+.async-http-dashboard .header-with-button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-lg, 1.5rem);
+}
+
+.async-http-dashboard .header-with-button h2 {
+  margin: 0;
+}
+
+.async-http-dashboard .clear-stats-form {
+  margin: 0;
+}
+
+.async-http-dashboard .clear-stats-form .btn {
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
 }
 
 .async-http-dashboard h2 {
@@ -194,10 +214,6 @@
 @media (max-width: 480px) {
   .stats-grid {
     grid-template-columns: 1fr;
-  }
-
-  .async-http-dashboard .section {
-    padding: var(--space-md, 1rem);
   }
 
   .capacity-bar {

@@ -17,3 +17,5 @@ ru:
   async_http.inflight: "В обработке"
   async_http.utilization: "Загрузка"
   async_http.no_active_processes: "Нет активных процессов"
+  async_http.clear_stats: "Clear Statistics"
+  async_http.clear_confirm: "Are you sure you want to clear all statistics? This cannot be undone."

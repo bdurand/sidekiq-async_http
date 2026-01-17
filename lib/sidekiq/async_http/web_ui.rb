@@ -49,6 +49,12 @@ module Sidekiq
             })
           end
 
+          # POST route for clearing statistics
+          app.post "/async-http/clear" do
+            Sidekiq::AsyncHttp::Stats.instance.reset!
+            redirect "#{root_path}async-http"
+          end
+
           # API endpoint for fetching stats as JSON
           app.get "/api/async-http/stats" do
             stats = Sidekiq::AsyncHttp::Stats.instance

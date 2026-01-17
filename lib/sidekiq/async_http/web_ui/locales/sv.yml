@@ -17,3 +17,5 @@ sv:
   async_http.inflight: "Pågående"
   async_http.utilization: "Utnyttjande"
   async_http.no_active_processes: "Inga aktiva processer"
+  async_http.clear_stats: "Clear Statistics"
+  async_http.clear_confirm: "Are you sure you want to clear all statistics? This cannot be undone."

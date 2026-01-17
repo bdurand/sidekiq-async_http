@@ -17,3 +17,5 @@ de:
   async_http.inflight: "In Bearbeitung"
   async_http.utilization: "Auslastung"
   async_http.no_active_processes: "Keine aktiven Prozesse"
+  async_http.clear_stats: "Clear Statistics"
+  async_http.clear_confirm: "Are you sure you want to clear all statistics? This cannot be undone."

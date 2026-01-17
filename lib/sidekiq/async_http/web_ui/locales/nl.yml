@@ -17,3 +17,5 @@ nl:
   async_http.inflight: "In behandeling"
   async_http.utilization: "Benutting"
   async_http.no_active_processes: "Geen actieve processen"
+  async_http.clear_stats: "Clear Statistics"
+  async_http.clear_confirm: "Are you sure you want to clear all statistics? This cannot be undone."
