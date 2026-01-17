@@ -15,9 +15,6 @@ module Sidekiq
       class << self
         # This method is called by Sidekiq::Web when registering the extension
         def registered(app)
-          require_relative "web_ui/helpers/helpers"
-          app.helpers Sidekiq::AsyncHttp::WebUI::Helpers
-
           # GET route for the main Async HTTP dashboard page
           app.get "/async-http" do
             stats = Sidekiq::AsyncHttp::Stats.instance
@@ -34,7 +31,7 @@ module Sidekiq
             # Get totals and calculate derived values
             totals = stats.get_totals
             total_requests = totals["requests"] || 0
-            avg_duration = (total_requests > 0) ? ((totals["duration"] || 0) / total_requests * 1000).round : 0
+            avg_duration = (total_requests > 0) ? ((totals["duration"] || 0).to_f / total_requests).round(3) : 0.0
 
             # Capacity metrics
             max_capacity = stats.get_total_max_connections

@@ -43,9 +43,9 @@ namespace :test_app do
       puts "Test application stopped"
     end
   end
-end
 
-desc "Open an interactive console with test workers loaded"
-task :console do
-  exec "ruby test_app/console.rb"
+  desc "Open an interactive console with test application loaded"
+  task :console do
+    exec "ruby test_app/console.rb"
+  end
 end

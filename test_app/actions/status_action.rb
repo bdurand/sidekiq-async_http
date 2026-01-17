@@ -2,13 +2,13 @@
 
 class StatusAction
   def call(env)
-    sidekiq_stats = Sidekiq::Stats.new
-    status = ExampleWorker.status.merge(
-      inflight: Sidekiq::AsyncHttp.metrics.inflight_count,
-      enqueued: sidekiq_stats.enqueued,
-      processed: sidekiq_stats.processed,
-      failed: sidekiq_stats.failed,
-      retry: sidekiq_stats.retry_size
+    current_stats = CurrentStats.new
+    async_stats = StatusReport.new("AsynchronousWorker").status
+    sync_stats = StatusReport.new("SynchronousWorker").status
+
+    status = current_stats.to_h.merge(
+      asynchronous: async_stats,
+      synchronous: sync_stats
     )
 
     [

@@ -75,19 +75,19 @@ Sidekiq.configure_client do |config|
 end
 
 # Enqueue some test jobs
-ExampleWorker.perform_async("https://httpbin.org/get")
-ExampleWorker.perform_async("https://httpbin.org/delay/2", "GET")
+AsynchronousWorker.perform_async("https://httpbin.org/get")
+AsynchronousWorker.perform_async("https://httpbin.org/delay/2", "GET")
 PostWorker.perform_async("https://httpbin.org/post", {test: "data"})
 TimeoutWorker.perform_async("https://httpbin.org/delay/10", 5)
 ```
 
 ## Test Workers
 
-### ExampleWorker
+### AsynchronousWorker
 Basic worker that makes HTTP requests and logs the response.
 
 ```ruby
-ExampleWorker.perform_async("https://example.com", "GET")
+AsynchronousWorker.perform_async("https://example.com", "GET")
 ```
 
 ### PostWorker

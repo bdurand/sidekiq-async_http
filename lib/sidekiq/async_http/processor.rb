@@ -374,6 +374,7 @@ module Sidekiq
         begin
           http_client = http_client(task.request)
           http_request = build_http_request(task.request)
+          http_request.headers.add("x-request-id", task.id)
 
           # Execute with timeout
           response_data = Async::Task.current.with_timeout(task.request.timeout || @config.default_request_timeout) do

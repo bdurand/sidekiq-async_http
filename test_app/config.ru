@@ -5,37 +5,6 @@ require "rack/session"
 require_relative "../lib/sidekiq-async_http"
 
 Sidekiq::AsyncHttp.load_web_ui
-
-# Redis URL from environment or default to localhost
-redis_url = ENV.fetch("REDIS_URL", "redis://localhost:6379/0")
-
-# Configure Sidekiq to use Valkey from docker-compose
-Sidekiq.configure_server do |config|
-  config.redis = {url: redis_url}
-end
-
-Sidekiq.configure_client do |config|
-  config.redis = {url: redis_url}
-end
-
-# Configure Sidekiq::AsyncHttp processor
-Sidekiq::AsyncHttp.configure do |config|
-  config.max_connections = ENV.fetch("MAX_CONNECTIONS", "256").to_i
-end
-
-Sidekiq::AsyncHttp.after_completion do |response|
-  Sidekiq.logger.info("Async HTTP Completed Continuation: #{response.status} #{response.method.to_s.upcase} #{response.url}")
-end
-
-Sidekiq::AsyncHttp.after_error do |error|
-  Sidekiq.logger.error("Async HTTP Error Continuation: #{error.class_name} #{error.message} on #{error.method.to_s.upcase} #{error.url}")
-end
-
-# Load test workers
-Dir.glob(File.join(__dir__, "workers/*.rb")).each do |file|
-  require_relative file
-end
-
 Dir.glob(File.join(__dir__, "actions/*.rb")).each do |file|
   require file
 end
