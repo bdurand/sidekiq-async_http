@@ -124,14 +124,6 @@ module Sidekiq::AsyncHttp
       @after_error_callbacks << block
     end
 
-    # Load Web UI extension if Sidekiq::Web is available
-    # This is done after all other requires to ensure dependencies are loaded
-    #
-    # @return [void]
-    def load_web_ui
-      require_relative "async_http/web_ui"
-    end
-
     # Check if the processor is running
     # @return [Boolean]
     def running?
