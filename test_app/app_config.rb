@@ -1,9 +1,24 @@
 # frozen_string_literal: true
 
+require "uri"
+
 class AppConfig
   class << self
     def redis_url
       ENV.fetch("REDIS_URL", "redis://localhost:6379/1")
+    end
+
+    def redacted_redis_url
+      uri = URI.parse(redis_url)
+      if uri.password
+        uri.password = "REDACTED"
+      end
+      if uri.user
+        uri.user = "REDACTED"
+      end
+      uri.to_s
+    rescue URI::InvalidURIError
+      "invalid_url"
     end
 
     def max_connections

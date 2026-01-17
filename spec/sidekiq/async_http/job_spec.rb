@@ -52,11 +52,11 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
     let(:called_args) { worker_class.instance_variable_get(:@called_args) }
 
     it "sets the success callback worker class" do
-      expect(worker_class.completion_callback_worker).to eq(worker_class::SuccessCallback)
+      expect(worker_class.completion_callback_worker).to eq(worker_class::CompletionCallback)
     end
 
-    it "defines a SuccessCallback worker class" do
-      worker_class::SuccessCallback.new.perform(response_data, "arg1", "arg2")
+    it "defines a CompletionCallback worker class" do
+      worker_class::CompletionCallback.new.perform(response_data, "arg1", "arg2")
       expect(called_args.size).to eq(1)
       response, arg1, arg2 = called_args.first
       expect(response).to be_a(Sidekiq::AsyncHttp::Response)
@@ -68,7 +68,7 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
     end
 
     it "allows setting Sidekiq options" do
-      sidekiq_options = worker_class::SuccessCallback.get_sidekiq_options
+      sidekiq_options = worker_class::CompletionCallback.get_sidekiq_options
       expect(sidekiq_options["retry"]).to eq(false)
     end
   end
@@ -171,7 +171,7 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
       it "sets the success and error workers to the dynamically defined callback workers" do
         worker_instance.async_request(:post, "https://api.example.com/data", body: "payload", timeout: 15)
         task = request_tasks.first
-        expect(task.completion_worker).to eq(worker_class::SuccessCallback)
+        expect(task.completion_worker).to eq(worker_class::CompletionCallback)
         expect(task.error_worker).to eq(worker_class::ErrorCallback)
       end
 
@@ -227,7 +227,7 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
         worker_class_without_error_callback.new.async_request(:put, "https://api.example.com/data/1", timeout: 30)
         task = request_tasks.first
         expect(task.error_worker).to be_nil
-        expect(task.completion_worker).to eq(worker_class_without_error_callback::SuccessCallback)
+        expect(task.completion_worker).to eq(worker_class_without_error_callback::CompletionCallback)
       end
     end
 

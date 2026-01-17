@@ -47,7 +47,7 @@ RSpec.describe "Crash Recovery", :integration do
     task = Sidekiq::AsyncHttp::RequestTask.new(
       request: request,
       sidekiq_job: job_payload,
-      completion_worker: "TestWorker::SuccessCallback"
+      completion_worker: "TestWorker::CompletionCallback"
     )
 
     # Register with old timestamp to simulate orphaned request
@@ -96,7 +96,7 @@ RSpec.describe "Crash Recovery", :integration do
     task = Sidekiq::AsyncHttp::RequestTask.new(
       request: request,
       sidekiq_job: job_payload,
-      completion_worker: "TestWorker::SuccessCallback"
+      completion_worker: "TestWorker::CompletionCallback"
     )
 
     # Register task (simulating it being in flight)
@@ -162,7 +162,7 @@ RSpec.describe "Crash Recovery", :integration do
     task = Sidekiq::AsyncHttp::RequestTask.new(
       request: request,
       sidekiq_job: job_payload,
-      completion_worker: "TestWorker::SuccessCallback"
+      completion_worker: "TestWorker::CompletionCallback"
     )
 
     # Register in Redis
@@ -219,7 +219,7 @@ RSpec.describe "Crash Recovery", :integration do
       task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
         sidekiq_job: job_payload,
-        completion_worker: "TestWorker::SuccessCallback"
+        completion_worker: "TestWorker::CompletionCallback"
       )
 
       # Register with old timestamp

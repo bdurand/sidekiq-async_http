@@ -52,7 +52,6 @@ RSpec.describe Sidekiq::AsyncHttp do
         c.default_request_timeout = 60
         c.shutdown_timeout = 30
         c.logger = custom_logger
-        c.dns_cache_ttl = 600
       end
 
       expect(config.max_connections).to eq(512)
@@ -60,7 +59,6 @@ RSpec.describe Sidekiq::AsyncHttp do
       expect(config.default_request_timeout).to eq(60)
       expect(config.shutdown_timeout).to eq(30)
       expect(config.logger).to eq(custom_logger)
-      expect(config.dns_cache_ttl).to eq(600)
     end
 
     it "works without a block" do

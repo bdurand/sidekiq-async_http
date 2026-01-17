@@ -73,13 +73,15 @@ The simplest way to use this gem is to include `Sidekiq::AsyncHttp::Job` in your
 class FetchDataWorker
   include Sidekiq::AsyncHttp::Job
 
-  # Define callback for successful responses
+  # Define callback for completed responses. Note that this will be called
+  # for all HTTP responses, including 4xx and 5xx status codes.
   on_completion do |response, user_id, endpoint|
     data = response.json
     User.find(user_id).update!(external_data: data)
   end
 
-  # Define callback for errors (optional)
+  # Define callback for errors (optional). This is only called if an
+  # error was raised during the HTTP request (timeout, connection failure, etc).
   on_error do |error, user_id, endpoint|
     Rails.logger.error("Failed to fetch data for user #{user_id}: #{error.message}")
     # Error will be retried automatically if no on_error is defined
@@ -164,9 +166,9 @@ class WebhookWorker
 end
 ```
 
-### Using Separate Callback Workers
+### Defining Your Own Callback Workers
 
-For more complex workflows or when you need different Sidekiq options for callbacks:
+For more complex workflows callbacks, you can define dedicated Sidekiq workers for completion and error handling:
 
 ```ruby
 # Define dedicated callback workers
@@ -230,7 +232,7 @@ end
 
 ## Response Object
 
-The `Sidekiq::AsyncHttp::Response` object passed to your success callback includes:
+The `Sidekiq::AsyncHttp::Response` object passed to your completion callback includes:
 
 ```ruby
 on_completion do |response, *args|
@@ -296,9 +298,6 @@ Sidekiq::AsyncHttp.configure do |config|
   # Idle connection timeout in seconds (default: 60)
   config.idle_connection_timeout = 60
 
-  # DNS cache TTL in seconds (default: 300)
-  config.dns_cache_ttl = 300
-
   # Heartbeat interval for crash recovery in seconds (default: 60)
   config.heartbeat_interval = 60
 
@@ -320,12 +319,11 @@ end
 |--------|---------|-------------|
 | `max_connections` | 256 | Maximum concurrent HTTP requests per Sidekiq process |
 | `default_request_timeout` | 60 | Default timeout in seconds for HTTP requests |
-| `shutdown_timeout` | 25 | Maximum time to wait for in-flight requests during shutdown |
-| `max_response_size` | 10MB | Maximum allowed response body size |
-| `idle_connection_timeout` | 60 | Time before idle connections are closed |
-| `dns_cache_ttl` | 300 | How long to cache DNS lookups |
-| `heartbeat_interval` | 60 | Interval for updating request heartbeats in Redis |
-| `orphan_threshold` | 300 | Age threshold for detecting orphaned requests |
+| `shutdown_timeout` | 25 | Maximum time to wait for in-flight requests during shutdown in seconds |
+| `max_response_size` | 10MB | Maximum allowed response body size in bytes|
+| `idle_connection_timeout` | 60 | Time before idle connections are closed in seconds |
+| `heartbeat_interval` | 60 | Interval for updating request heartbeats in Redis in seconds|
+| `orphan_threshold` | 300 | Age threshold for detecting orphaned requests in seconds |
 | `user_agent` | nil | Default User-Agent header for all requests |
 | `logger` | Sidekiq.logger | Logger instance for debug/error output |
 
@@ -455,7 +453,6 @@ The gem uses [async-http](https://github.com/socketry/async-http) which provides
 Sidekiq::AsyncHttp.configure do |config|
   config.max_connections = 500        # Higher concurrency
   config.idle_connection_timeout = 120 # Keep connections alive longer
-  config.dns_cache_ttl = 600          # Cache DNS longer
 end
 ```
 
@@ -465,7 +462,6 @@ end
 Sidekiq::AsyncHttp.configure do |config|
   config.max_connections = 200        # Moderate concurrency
   config.idle_connection_timeout = 30 # Release idle connections faster
-  config.dns_cache_ttl = 60           # Fresher DNS for diverse hosts
 end
 ```
 

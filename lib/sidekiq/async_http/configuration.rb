@@ -19,9 +19,6 @@ module Sidekiq
       # @return [Integer] Graceful shutdown timeout in seconds
       attr_reader :shutdown_timeout
 
-      # @return [Integer] DNS cache TTL in seconds
-      attr_reader :dns_cache_ttl
-
       # @return [Integer] Maximum response size in bytes
       attr_reader :max_response_size
 
@@ -41,7 +38,6 @@ module Sidekiq
       # @param default_request_timeout [Integer] Default request timeout in seconds
       # @param shutdown_timeout [Integer] Graceful shutdown timeout in seconds
       # @param logger [Logger, nil] Logger instance to use
-      # @param dns_cache_ttl [Integer] DNS cache TTL in seconds
       # @param max_response_size [Integer] Maximum response size in bytes
       # @param heartbeat_interval [Integer] Interval for updating inflight request heartbeats in seconds
       # @param orphan_threshold [Integer] Age threshold for detecting orphaned requests in seconds
@@ -52,7 +48,6 @@ module Sidekiq
         default_request_timeout: 60,
         shutdown_timeout: 25,
         logger: nil,
-        dns_cache_ttl: 300,
         max_response_size: 10 * 1024 * 1024,
         heartbeat_interval: 60,
         orphan_threshold: 300,
@@ -63,7 +58,6 @@ module Sidekiq
         self.default_request_timeout = default_request_timeout
         self.shutdown_timeout = shutdown_timeout
         self.logger = logger
-        self.dns_cache_ttl = dns_cache_ttl
         self.max_response_size = max_response_size
         self.heartbeat_interval = heartbeat_interval
         self.orphan_threshold = orphan_threshold
@@ -98,11 +92,6 @@ module Sidekiq
         @shutdown_timeout = value
       end
 
-      def dns_cache_ttl=(value)
-        validate_positive(:dns_cache_ttl, value)
-        @dns_cache_ttl = value
-      end
-
       def max_response_size=(value)
         validate_positive(:max_response_size, value)
         @max_response_size = value
@@ -129,7 +118,6 @@ module Sidekiq
           "default_request_timeout" => default_request_timeout,
           "shutdown_timeout" => shutdown_timeout,
           "logger" => logger,
-          "dns_cache_ttl" => dns_cache_ttl,
           "max_response_size" => max_response_size,
           "heartbeat_interval" => heartbeat_interval,
           "orphan_threshold" => orphan_threshold,

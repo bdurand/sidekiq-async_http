@@ -73,8 +73,8 @@ module Sidekiq::AsyncHttp
           end
         end
 
-        const_set(:SuccessCallback, worker_class)
-        self.completion_callback_worker = const_get(:SuccessCallback)
+        const_set(:CompletionCallback, worker_class)
+        self.completion_callback_worker = const_get(:CompletionCallback)
       end
 
       # Sets the success callback worker class.
@@ -147,8 +147,8 @@ module Sidekiq::AsyncHttp
       completion_worker ||= self.class.completion_callback_worker
       error_worker ||= self.class.error_callback_worker
 
-      request_task = client.async_request(method, url, **options)
-      request_task.execute(completion_worker: completion_worker, error_worker: error_worker)
+      request = client.async_request(method, url, **options)
+      request.execute(completion_worker: completion_worker, error_worker: error_worker)
     end
 
     # Convenience method for GET requests.

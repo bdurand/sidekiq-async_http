@@ -20,7 +20,7 @@ puts "=" * 80
 puts "Sidekiq::AsyncHttp Test Application (Async HTTP Server)"
 puts "=" * 80
 puts "Processor max_connections: #{Sidekiq::AsyncHttp.configuration.max_connections}"
-puts "Redis URL: #{AppConfig.redis_url}"
+puts "Redis URL: #{AppConfig.redacted_redis_url}"
 puts "Web UI: http://localhost:#{AppConfig.port}/"
 puts "=" * 80
 puts ""

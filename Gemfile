@@ -9,6 +9,7 @@ gem "protocol-rack", "~> 0.21"
 gem "rack-session", "~> 2.0"
 gem "mock_redis", "~> 0.53"
 gem "sidekiq-throttled"
+gem "sidekiq-encrypted_args"
 
 gem "rspec", "~> 3.13"
 gem "rake"

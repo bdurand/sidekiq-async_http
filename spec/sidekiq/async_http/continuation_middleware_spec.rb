@@ -72,7 +72,7 @@ RSpec.describe Sidekiq::AsyncHttp::ContinuationMiddleware do
     context "when processing completion continuation jobs" do
       let(:job) do
         {
-          "class" => "TestWorker::SuccessCallback",
+          "class" => "TestWorker::CompletionCallback",
           "jid" => "test-123",
           "args" => [response_data, "original_arg1", "original_arg2"],
           "async_http_continuation" => "completion"

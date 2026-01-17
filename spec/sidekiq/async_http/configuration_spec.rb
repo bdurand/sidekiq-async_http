@@ -13,7 +13,6 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
         expect(config.default_request_timeout).to eq(60)
         expect(config.shutdown_timeout).to eq(25)
         expect(config.logger).to eq(Sidekiq.logger)
-        expect(config.dns_cache_ttl).to eq(300)
       end
     end
 
@@ -25,8 +24,7 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
           idle_connection_timeout: 120,
           default_request_timeout: 60,
           shutdown_timeout: 30,
-          logger: custom_logger,
-          dns_cache_ttl: 600
+          logger: custom_logger
         )
 
         expect(config.max_connections).to eq(512)
@@ -34,7 +32,6 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
         expect(config.default_request_timeout).to eq(60)
         expect(config.shutdown_timeout).to eq(30)
         expect(config.logger).to eq(custom_logger)
-        expect(config.dns_cache_ttl).to eq(600)
       end
     end
 
@@ -108,15 +105,6 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
       end
     end
 
-    context "with invalid dns_cache_ttl" do
-      it "raises ArgumentError for zero" do
-        expect { described_class.new(dns_cache_ttl: 0) }.to raise_error(
-          ArgumentError,
-          "dns_cache_ttl must be a positive number, got: 0"
-        )
-      end
-    end
-
     context "with float values" do
       it "accepts positive floats for timeouts" do
         described_class.new(
@@ -178,8 +166,7 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
         idle_connection_timeout: 120,
         default_request_timeout: 60,
         shutdown_timeout: 30,
-        logger: custom_logger,
-        dns_cache_ttl: 600
+        logger: custom_logger
       )
 
       hash = config.to_h
@@ -190,7 +177,6 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
       expect(hash["default_request_timeout"]).to eq(60)
       expect(hash["shutdown_timeout"]).to eq(30)
       expect(hash["logger"]).to eq(custom_logger)
-      expect(hash["dns_cache_ttl"]).to eq(600)
     end
   end
 end

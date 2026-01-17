@@ -44,6 +44,7 @@ module Sidekiq::AsyncHttp
         request.headers.each do |key, value|
           req[key] = value
         end
+        req["x-request-id"] = @task.id
 
         # Set body if present
         req.body = request.body if request.body
