@@ -9,6 +9,11 @@ RSpec.describe Sidekiq::AsyncHttp::ClassHelper do
       expect(klass).to eq(Sidekiq::AsyncHttp::ClassHelper)
     end
 
+    it "handles absolute class names" do
+      klass = described_class.resolve_class_name("::Sidekiq::AsyncHttp::ClassHelper")
+      expect(klass).to eq(Sidekiq::AsyncHttp::ClassHelper)
+    end
+
     it "raises NameError for unknown class" do
       expect {
         described_class.resolve_class_name("NonExistent::ClassName")

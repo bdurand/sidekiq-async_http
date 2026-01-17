@@ -234,6 +234,9 @@ class SensitiveDataWorker
 end
 ```
 
+> [!NOTE]
+> The encryption feature in Sidekiq Enterprise is not compatible with this gem due to its restriction on how job arguments are used.
+
 ## Configuration
 
 The gem can be configured globally in an initializer:

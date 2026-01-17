@@ -17,7 +17,10 @@ module Sidekiq::AsyncHttp
       return class_name if class_name.is_a?(Class)
       return nil if class_name.nil? || class_name.empty?
 
-      class_name.split("::").reduce(Object) { |mod, name| mod.const_get(name) }
+      hierarchy = class_name.split("::")
+      hierarchy.shift if hierarchy.first.to_s.empty? # strip leading :: for abosolute names
+
+      hierarchy.reduce(Object) { |mod, name| mod.const_get(name) }
     end
   end
 end
