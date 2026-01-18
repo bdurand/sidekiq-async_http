@@ -15,6 +15,7 @@ require "bundler/setup"
 require "webmock/rspec"
 require "async/rspec"
 require "sidekiq/testing"
+require "redis"
 require "mock_redis"
 
 require_relative "../lib/sidekiq-async_http"
