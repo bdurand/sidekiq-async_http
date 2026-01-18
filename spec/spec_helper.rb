@@ -104,5 +104,6 @@ RSpec.configure do |config|
 
   config.after(:suite) do
     test_web_server.stop
+    Sidekiq::AsyncHttp.stop if Sidekiq::AsyncHttp.running?
   end
 end

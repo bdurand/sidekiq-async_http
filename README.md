@@ -377,19 +377,23 @@ Open a pull request on [GitHub](https://github.com/bdurand/sidekiq-async_http).
 
 Please use the [standardrb](https://github.com/testdouble/standard) syntax and lint your code with `standardrb --fix` before submitting.
 
-There is a bundled test app in the `test_app` directory that can be used for manual testing and experimentation. To run the server first start up a Valkey container with:
+Running the tests requires a Redis compatible server. There is a script to start one in a local container running on port 24455:
 
 ```bash
-bundle exec rake test_app:valkey
+bin/run-valkey
 ```
 
-Then start the test application with:
+Then run the test suite with:
+
+```bash
+bundle exec rake
+```
+
+There is also a bundled test app in the `test_app` directory that can be used for manual testing and experimentation. The server will run on http://localhost:9292 and can be started with:
 
 ```bash
 bundle exec rake test_app
 ```
-
-The server requires a Redis compatible server. The command will attempt to start a Valkey container and requires either the docker or container CLI to be installed.
 
 ## License
 
