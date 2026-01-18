@@ -70,7 +70,7 @@ RSpec.configure do |config|
     retries = 3
     begin
       Sidekiq.redis(&:flushdb)
-    rescue RedisClient::CannotConnectError => e
+    rescue RedisClient::CannotConnectError
       retries -= 1
       if retries > 0
         sleep(0.5)
