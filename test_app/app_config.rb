@@ -5,7 +5,7 @@ require "uri"
 class AppConfig
   class << self
     def redis_url
-      ENV.fetch("VALKEY_URL", "redis://localhost:26379/0")
+      ENV.fetch("REDIS_URL", "redis://localhost:24455/1")
     end
 
     def redacted_redis_url

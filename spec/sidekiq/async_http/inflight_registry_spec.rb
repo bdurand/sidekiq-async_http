@@ -69,7 +69,7 @@ RSpec.describe Sidekiq::AsyncHttp::InflightRegistry do
 
       Sidekiq.redis do |redis|
         expect(redis.zcard(described_class::INFLIGHT_INDEX_KEY)).to eq(0)
-        expect(redis.hexists(described_class::INFLIGHT_JOBS_KEY, task.id)).to be false
+        expect(redis.hexists(described_class::INFLIGHT_JOBS_KEY, task.id)).to eq(0)
       end
     end
   end
@@ -210,7 +210,7 @@ RSpec.describe Sidekiq::AsyncHttp::InflightRegistry do
       # Request should be removed from Redis
       Sidekiq.redis do |redis|
         expect(redis.zcard(described_class::INFLIGHT_INDEX_KEY)).to eq(0)
-        expect(redis.hexists(described_class::INFLIGHT_JOBS_KEY, task.id)).to be false
+        expect(redis.hexists(described_class::INFLIGHT_JOBS_KEY, task.id)).to eq(0)
       end
     end
 

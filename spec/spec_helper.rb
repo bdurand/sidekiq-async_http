@@ -15,14 +15,13 @@ require "bundler/setup"
 require "webmock/rspec"
 require "async/rspec"
 require "sidekiq/testing"
-require "redis"
-require "mock_redis"
 
 require_relative "../lib/sidekiq-async_http"
 
-# Set to to a dummy Redis URL so it doesn't accidentally connect to real Redis
-# if something is misconfigured.
-ENV["REDIS_URL"] ||= "redis://localhost:1/0"
+# Configure Redis URL for tests - use Valkey container on port 24455, database 0
+# Can be overridden with REDIS_URL environment variable
+# Using 127.0.0.1 instead of localhost to avoid macOS local network permission issues
+ENV["REDIS_URL"] ||= "redis://127.0.0.1:24455/0"
 
 # Disable all real HTTP connections except localhost (for test server)
 WebMock.disable_net_connect!(allow_localhost: true)
@@ -65,14 +64,26 @@ RSpec.configure do |config|
   # Include Async::RSpec::Reactor for async tests
   config.include Async::RSpec::Reactor
 
-  # Setup MockRedis for testing
+  # Flush Redis database before test suite runs
   config.before(:suite) do
-    $mock_redis = MockRedis.new # rubocop:disable Style/GlobalVars
+    # Retry connection in case Redis is starting up
+    retries = 3
+    begin
+      Sidekiq.redis(&:flushdb)
+    rescue RedisClient::CannotConnectError => e
+      retries -= 1
+      if retries > 0
+        sleep(0.5)
+        retry
+      else
+        raise
+      end
+    end
   end
 
+  # Flush Redis database after each test
   config.before do |example|
-    $mock_redis.flushdb # rubocop:disable Style/GlobalVars
-    allow(Sidekiq).to receive(:redis).and_yield($mock_redis) # rubocop:disable Style/GlobalVars
+    Sidekiq.redis(&:flushdb)
     Sidekiq::Worker.clear_all
   end
 

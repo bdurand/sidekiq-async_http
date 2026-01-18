@@ -452,10 +452,21 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
     let(:processor_with_logger) { described_class.new(config) }
 
     it "logs errors from the reactor loop" do
+      error_logged = Concurrent::AtomicBoolean.new(false)
       # Force an error in the reactor by making dequeue_request raise
-      allow(processor_with_logger).to receive(:dequeue_request).and_raise(StandardError.new("Test error"))
+      allow(processor_with_logger).to receive(:dequeue_request) do
+        error_logged.make_true
+        raise StandardError.new("Test error")
+      end
 
       processor_with_logger.start
+      processor_with_logger.wait_for_running
+
+      # Wait for the error to be logged
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 1
+      until error_logged.true? || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+        Thread.pass
+      end
 
       expect(log_output.string).to match(/Test error/)
     end
@@ -486,8 +497,12 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
 
     it "consumes requests from the queue" do
       requests_processed = []
+      signal_queue = Queue.new
       processor = described_class.new(config)
-      processor.testing_callback = ->(task) { requests_processed << task }
+      processor.testing_callback = ->(task) {
+        requests_processed << task
+        signal_queue << task
+      }
       processor.start
 
       request1 = create_request_task
@@ -496,21 +511,27 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       processor.enqueue(request1)
       processor.enqueue(request2)
 
-      processor.wait_for_idle
+      # Wait for both requests to be processed
+      2.times { signal_queue.pop }
 
       expect(requests_processed).to include(request1, request2)
     end
 
     it "spawns new fibers for each request" do
       fiber_count = Concurrent::AtomicFixnum.new(0)
+      signal_queue = Queue.new
       processor = described_class.new(config)
-      processor.testing_callback = ->(task) { fiber_count.increment }
+      processor.testing_callback = ->(task) {
+        fiber_count.increment
+        signal_queue << task
+      }
       processor.start
 
       # Enqueue multiple requests
       3.times { |i| processor.enqueue(create_request_task) }
 
-      processor.wait_for_idle
+      # Wait for all 3 to complete
+      3.times { signal_queue.pop }
 
       expect(fiber_count.value).to eq(3)
     end
@@ -537,9 +558,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       end
 
       processor.start
-
-      # Wait for loop to be running (with timeout)
-      sleep(0.001) until loop_running.true?
+      processor.wait_for_running
 
       # Stop the processor
       processor.stop(timeout: 0)

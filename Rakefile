@@ -21,13 +21,18 @@ RSpec::Core::RakeTask.new(:spec)
 
 task default: [:spec]
 
+desc "Start a valkey container for testing running on port 24455"
+task :valkey do
+  exec "exec bin/run-valkey"
+end
+
 desc "Run the test application for manual testing"
 task test_app: "test_app:start"
 
 namespace :test_app do
   desc "Start the test application"
   task :start do
-    exec "ruby test_app/server.rb"
+    exec "ruby test_app/server"
   end
 
   desc "Stop the running test application"
@@ -47,13 +52,8 @@ namespace :test_app do
     end
   end
 
-  desc "Start a valkey container for testing"
-  task :valkey do
-    exec "exec test_app/run-valkey"
-  end
-
   desc "Open an interactive console with test application loaded"
   task :console do
-    exec "ruby test_app/console.rb"
+    exec "ruby test_app/console"
   end
 end

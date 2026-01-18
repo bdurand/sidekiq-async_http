@@ -91,6 +91,9 @@ RSpec.describe "Capacity Limit Integration", :integration do
         error_worker: "TestWorkers::ErrorWorker"
       )
 
+      # Wait for requests to start processing
+      processor.wait_for_processing
+
       # Should raise error due to capacity limit
       expect {
         processor.enqueue(request_task3)

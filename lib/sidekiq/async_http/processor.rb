@@ -36,7 +36,6 @@ module Sidekiq
       # Initialize the processor.
       #
       # @param config [Configuration] the configuration object
-      #
       # @return [void]
       def initialize(config = nil)
         @config = config || Sidekiq::AsyncHttp.configuration
@@ -61,7 +60,8 @@ module Sidekiq
         return if running?
 
         @tasks_lock.synchronize do
-          @state.set(:running)
+          return if starting? || running?
+          @state.set(:starting)
           @shutdown_barrier.reset
           @reactor_ready.reset
         end
@@ -80,6 +80,7 @@ module Sidekiq
 
         @monitor_thread = Thread.new do
           Thread.current.name = "async-http-monitor"
+          @state.set(:running)
           run_monitor
         rescue => e
           # Log error but don't crash
@@ -95,7 +96,6 @@ module Sidekiq
       # Stop the processor.
       #
       # @param timeout [Numeric, nil] how long to wait for in-flight requests (seconds)
-      #
       # @return [void]
       def stop(timeout: nil)
         return if stopped?
@@ -170,10 +170,8 @@ module Sidekiq
       # Enqueue a request task for processing.
       #
       # @param task [RequestTask] the request task to enqueue
-      #
       # @raise [NotRunningError] if processor is not running
       # @raise [MaxCapacityError] if at max capacity
-      #
       # @return [void]
       def enqueue(task)
         unless running?
@@ -188,6 +186,13 @@ module Sidekiq
 
         task.enqueued!
         @queue.push(task)
+      end
+
+      # Check if processor is starting.
+      #
+      # @return [Boolean]
+      def starting?
+        state == :starting
       end
 
       # Check if processor is running.
@@ -248,13 +253,26 @@ module Sidekiq
         @inflight_requests.size
       end
 
+      # Wait for the processor to start.
+      #
+      # @param timeout [Numeric] maximum time to wait in seconds (default: 5)
+      # @return [Boolean] true if started, false if timeout reached
+      # @api private
+      def wait_for_running(timeout: 5)
+        start
+        deadline = monotonic_time + timeout
+        while monotonic_time <= deadline
+          return true if running?
+          sleep(SHUTDOWN_POLL_INTERVAL)
+        end
+        false
+      end
+
       # Wait for the queue to be empty and all in-flight requests to complete.
       # This is mainly for use in tests.
       #
       # @param timeout [Numeric] maximum time to wait in seconds (default: 5)
-      #
       # @return [Boolean] true if processing completed, false if timeout reached
-      #
       # @api private
       def wait_for_idle(timeout: 1)
         deadline = monotonic_time + timeout
@@ -268,9 +286,7 @@ module Sidekiq
       # Wait for at least one request to start processing. This is mainly for use in tests.
       #
       # @param timeout [Numeric] maximum time to wait in seconds (default: 5)
-      #
       # @return [Boolean] true if a request started processing, false if timeout reached
-      #
       # @api private
       def wait_for_processing(timeout: 1)
         deadline = monotonic_time + timeout
@@ -341,7 +357,6 @@ module Sidekiq
       # Dequeue a request task with timeout.
       #
       # @param timeout [Numeric] timeout in seconds
-      #
       # @return [RequestTask, nil] the request task or nil if timeout
       def dequeue_request(timeout:)
         @queue.pop(timeout: timeout)
@@ -353,7 +368,6 @@ module Sidekiq
       # Process a single HTTP request task.
       #
       # @param task [RequestTask] the request task to process
-      #
       # @return [void]
       def process_request(task)
         # Move from pending to in-flight tracking
@@ -419,9 +433,7 @@ module Sidekiq
       #
       # @param async_response [Async::HTTP::Protocol::Response] the async HTTP response
       # @param headers_hash [Hash] the response headers
-      #
       # @return [String, nil] the response body or nil if no body present
-      #
       # @raise [ResponseTooLargeError] if body exceeds max_response_size
       def read_response_body(async_response, headers_hash)
         return nil unless async_response.body
@@ -452,7 +464,6 @@ module Sidekiq
       # Create an Async::HTTP::Client for the given request.
       #
       # @param request [Request] the request object
-      #
       # @return [Async::HTTP::Client] the async HTTP client
       def http_client(request)
         endpoint = Async::HTTP::Endpoint.parse(
@@ -466,7 +477,6 @@ module Sidekiq
       # Build an Async::HTTP::Request from our Request object.
       #
       # @param request [Request] the request object
-      #
       # @return [Async::HTTP::Request] the async HTTP request
       def build_http_request(request)
         uri = URI.parse(request.url)
@@ -500,7 +510,6 @@ module Sidekiq
       #
       # @param task [RequestTask] the original request task
       # @param http_response [Hash] the response data
-      #
       # @return [Response] the response object
       def build_response(task, http_response)
         Response.new(
@@ -518,7 +527,6 @@ module Sidekiq
       # Classify an error by type.
       #
       # @param exception [Exception] the exception
-      #
       # @return [Symbol] the error type
       def classify_error(exception)
         case exception
@@ -539,7 +547,6 @@ module Sidekiq
       #
       # @param task [RequestTask] the request task
       # @param response [Response] the response object
-      #
       # @return [void]
       def handle_success(task, response)
         if stopped?
@@ -562,7 +569,6 @@ module Sidekiq
       #
       # @param task [RequestTask] the request task
       # @param exception [Exception] the exception
-      #
       # @return [void]
       def handle_error(task, exception)
         if stopped?
