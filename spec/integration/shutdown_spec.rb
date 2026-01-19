@@ -14,6 +14,12 @@ RSpec.describe "Processor Shutdown Integration", :integration do
 
   let!(:processor) { Sidekiq::AsyncHttp::Processor.new(config) }
 
+  around do |example|
+    processor.run do
+      example.run
+    end
+  end
+
   before do
     # Clear any pending Sidekiq jobs first
     Sidekiq::Queues.clear_all
@@ -30,14 +36,9 @@ RSpec.describe "Processor Shutdown Integration", :integration do
 
     # Keep fake mode so jobs queue but don't execute immediately
     Sidekiq::Testing.fake!
-
-    processor.start
   end
 
   after do
-    # Stop processor with minimal timeout to force re-enqueue of any remaining requests
-    processor.stop(timeout: 0) if processor.running?
-
     # Re-enable WebMock
     WebMock.enable!
     WebMock.disable_net_connect!(allow_localhost: true)

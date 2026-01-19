@@ -199,9 +199,7 @@ RSpec.describe "Crash Recovery", :integration do
     )
     fast_processor = Sidekiq::AsyncHttp::Processor.new(fast_config)
     fast_registry = fast_processor.inflight_registry
-    fast_processor.start
-
-    begin
+    fast_processor.run do
       # Create an orphaned request
       job_payload = {
         "class" => "TestWorker",
@@ -241,8 +239,6 @@ RSpec.describe "Crash Recovery", :integration do
 
       # Job should have been re-enqueued
       expect(reenqueued).to be true
-    ensure
-      fast_processor.stop(timeout: 1)
     end
   end
 end
