@@ -35,7 +35,7 @@ class RunJobsAction
       end
 
       url = "#{base_url}?delay=#{actual_delay}"
-      worker.perform_async("GET", url, timeout, actual_delay)
+      worker.perform_async("GET", url, timeout)
     end
 
     [204, {}, []]

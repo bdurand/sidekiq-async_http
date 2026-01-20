@@ -241,6 +241,12 @@ class SensitiveDataWorker
 end
 ```
 
+If you are using the `Sidekiq::AsyncHttp.after_completion` or `Sidekiq::AsyncHttp.after_error` callbacks, you will also need to append the middleware so that it comes after the decryption middleware inserted by calling `Sidekiq::EncryptedArgs.configure!`:
+
+```ruby
+Sidekiq::AsyncHttp.append_middlware
+```
+
 > [!NOTE]
 > You can only encrypt the response argument by name with the `encrypted_args` option when using `on_completion`. If you need to encrypt other arguments, you can either pass `true` to encrypt all arguments or pass an array of the indexes of the arguments to encrypt. See the [sidekiq-encrypted_args documentation](https://github.com/bdurand/sidekiq-encrypted_args) for more details.
 

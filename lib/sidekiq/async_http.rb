@@ -125,6 +125,22 @@ module Sidekiq::AsyncHttp
       @after_error_callbacks << block
     end
 
+    # Add Sidekiq middleware for context and continuation handling. The middleware
+    # is already added during initialization. You can call this method again to
+    # append the middleware if needed to insert it after other middleware. If you need
+    # further control, you can manually add the `Sidekiq::AsyncHttp::Context::Middleware`
+    # and `Sidekiq::AsyncHttp::ContinuationMiddleware` middleware yourself.
+    #
+    # @return [void]
+    def append_middlware
+      Sidekiq.configure_server do |config|
+        config.server_middleware do |chain|
+          chain.add Sidekiq::AsyncHttp::Context::Middleware
+          chain.add Sidekiq::AsyncHttp::ContinuationMiddleware
+        end
+      end
+    end
+
     # Check if the processor is running
     # @return [Boolean]
     def running?

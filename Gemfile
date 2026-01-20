@@ -8,7 +8,7 @@ gem "async-http", "~> 0.94"
 gem "protocol-rack", "~> 0.21"
 gem "rack-session", "~> 2.0"
 gem "sidekiq-throttled"
-gem "sidekiq-encrypted_args"
+gem "sidekiq-encrypted_args", github: "bdurand/sidekiq-encrypted_args", branch: "decrypt-before"
 
 gem "rspec", "~> 3.13"
 gem "rake"

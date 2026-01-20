@@ -38,6 +38,7 @@ module Sidekiq
       def initialize(config = nil)
         @config = config || Sidekiq::AsyncHttp.configuration
         @metrics = Metrics.new
+        @stats = Stats.new(@config)
         @inflight_registry = InflightRegistry.new(@config)
         @queue = Thread::Queue.new
         @state = Concurrent::AtomicReference.new(:stopped)
@@ -124,7 +125,7 @@ module Sidekiq
         end
 
         # Clean up process-specific keys from Redis
-        Stats.instance.cleanup_process_keys
+        @stats.cleanup_process_keys
 
         # Re-enqueue each incomplete task
         tasks_to_reenqueue.each do |task|
@@ -178,6 +179,7 @@ module Sidekiq
         # Check capacity - raise error if at max connections
         if inflight_count >= @config.max_connections
           @metrics.record_refused
+          @stats.record_refused
           raise MaxCapacityError.new("Cannot enqueue request: already at max capacity (#{@config.max_connections} connections)")
         end
 
@@ -333,7 +335,7 @@ module Sidekiq
 
             # Update inflight stats periodically
             if monotonic_time - last_inflight_update >= INFLIGHT_UPDATE_INTERVAL
-              Stats.instance.update_inflight(inflight_count, @config.max_connections)
+              @stats.update_inflight(inflight_count, @config.max_connections)
               last_inflight_update = monotonic_time
             end
 
@@ -428,6 +430,7 @@ module Sidekiq
           task.completed!
           error_type = classify_error(e)
           @metrics.record_error(error_type)
+          @stats.record_error(error_type)
           handle_error(task, e)
         ensure
           # Remove from in-flight tracking
@@ -435,6 +438,7 @@ module Sidekiq
             @inflight_requests.delete(task.id)
           end
           @metrics.record_request_complete(task.duration)
+          @stats.record_request(task.duration)
 
           @testing_callback&.call(task) if AsyncHttp.testing?
         end

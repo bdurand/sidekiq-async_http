@@ -10,7 +10,7 @@ class SynchronousWorker
 
   sidekiq_throttle(concurrency: {limit: 25})
 
-  def perform(method, url, timeout, delay)
+  def perform(method, url, timeout)
     status_report = StatusReport.new("SynchronousWorker")
     begin
       response = execute_request(method, url, timeout)

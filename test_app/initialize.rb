@@ -8,6 +8,7 @@ require_relative "../lib/sidekiq-async_http"
 require_relative "app_config"
 
 Sidekiq::EncryptedArgs.configure!(secret: "A_VERY_SECRET_KEY_FOR_TESTING_PURPOSES_ONLY!")
+Sidekiq::AsyncHttp.append_middlware
 
 # Configure Sidekiq to use Valkey from docker-compose
 Sidekiq.configure_server do |config|

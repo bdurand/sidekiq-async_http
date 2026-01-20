@@ -538,7 +538,7 @@ Hooks into Sidekiq's lifecycle for startup and shutdown:
    a. Collect all tasks from @inflight_requests and @pending_tasks
    b. For each task, call task.reenqueue_job
    c. Log re-enqueue at info level
-7. Clean up Redis stats keys for this process (Stats.instance.cleanup_process_keys)
+7. Clean up Redis stats keys for this process (Stats.new.cleanup_process_keys)
 8. Reactor thread terminates
 9. Processor state set to :stopped
 10. Shutdown complete

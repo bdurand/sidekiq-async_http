@@ -14,11 +14,11 @@ class AsynchronousWorker
   end
 
   on_error(encrypted_args: true) do |error, method, url, timeout, delay|
-    Sidekiq.logger.error("Asynchronous request failed: #{method.upcase} #{url} - Error: #{error.message}")
+    Sidekiq.logger.error("Asynchronous request failed: #{method.upcase} #{url} - Error: #{error.class_name} #{error.message}")
     StatusReport.new("AsynchronousWorker").error!
   end
 
-  def perform(method, url, timeout, delay)
+  def perform(method, url, timeout)
     async_request(method, url, timeout: timeout)
   end
 end
