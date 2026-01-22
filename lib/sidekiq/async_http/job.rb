@@ -29,12 +29,14 @@ module Sidekiq::AsyncHttp
     class << self
       # Hook called when the module is included in a class.
       #
-      # Ensures the base class includes Sidekiq::Job and extends it with ClassMethods.
-      #
       # @param base [Class] the class including this module
       def included(base)
-        base.include(Sidekiq::Job) unless base.include?(Sidekiq::Job)
+        unless defined?(ActiveJob::Base) && base < ActiveJob::Base
+          base.include(Sidekiq::Job) unless base.include?(Sidekiq::Job)
+        end
+
         base.extend(ClassMethods)
+        base.async_http_client
       end
     end
 
@@ -52,8 +54,8 @@ module Sidekiq::AsyncHttp
       # @option options [String] :base_url Base URL for relative requests
       # @option options [Hash] :headers Default headers
       # @option options [Float] :timeout Default timeout
-      def client(**options)
-        @client = Sidekiq::AsyncHttp::Client.new(**options)
+      def async_http_client(**options)
+        @async_http_client = Sidekiq::AsyncHttp::Client.new(**options)
       end
 
       # Defines a success callback for HTTP requests.
@@ -64,6 +66,7 @@ module Sidekiq::AsyncHttp
       # @yieldparam args [Array] additional arguments passed to the job
       def on_completion(options = {}, &block)
         on_completion_block = block
+        active_job = defined?(ActiveJob::Base) && self < ActiveJob::Base
 
         worker_class = Class.new do
           include Sidekiq::Job
@@ -72,6 +75,7 @@ module Sidekiq::AsyncHttp
 
           define_method(:perform) do |response_data, *args|
             response = Sidekiq::AsyncHttp::Response.load(response_data)
+            args = args.first["arguments"] if active_job
             on_completion_block.call(response, *args)
           end
         end
@@ -100,6 +104,7 @@ module Sidekiq::AsyncHttp
       # @yieldparam args [Array] additional arguments passed to the job
       def on_error(options = {}, &block)
         error_callback_block = block
+        active_job = defined?(ActiveJob::Base) && self < ActiveJob::Base
 
         worker_class = Class.new do
           include Sidekiq::Job
@@ -108,6 +113,7 @@ module Sidekiq::AsyncHttp
 
           define_method(:perform) do |error_data, *args|
             error = Sidekiq::AsyncHttp::Error.load(error_data)
+            args = args.first["arguments"] if active_job
             error_callback_block.call(error, *args)
           end
         end
@@ -127,13 +133,18 @@ module Sidekiq::AsyncHttp
 
         @error_callback_worker = worker_class
       end
-    end
 
-    # Returns the HTTP client for this job instance.
-    #
-    # @return [Client] the configured client or a default client
-    def client
-      self.class.instance_variable_get(:@client) || Sidekiq::AsyncHttp::Client.new
+      # Check if the class is an ActiveJob but not using Sidekiq as the queue adapter.
+      #
+      # @return [Boolean] true if Sidekiq is the queue adapter
+      # @api private
+      def asynchronous_http_requests_supported?
+        if defined?(ActiveJob::Base) && self <= ActiveJob::Base
+          queue_adapter_name == "sidekiq"
+        else
+          true
+        end
+      end
     end
 
     # Makes an asynchronous HTTP request.
@@ -150,8 +161,8 @@ module Sidekiq::AsyncHttp
       completion_worker ||= self.class.completion_callback_worker
       error_worker ||= self.class.error_callback_worker
 
-      request = client.async_request(method, url, **options)
-      request.execute(completion_worker: completion_worker, error_worker: error_worker, synchronous: synchronous_requests?)
+      request = async_http_client.async_request(method, url, **options)
+      request.execute(completion_worker: completion_worker, error_worker: error_worker)
     end
 
     # Convenience method for GET requests.
@@ -199,24 +210,16 @@ module Sidekiq::AsyncHttp
       async_request(:delete, url, **options)
     end
 
-    # Check if the class is an ActiveJob but not using Sidkiq as the queue adapter.
+    # Returns the HTTP client for this job instance.
     #
-    # @return [Boolean] true if Sidekiq is the queue adapter
-    def synchronous_requests?
-      if defined?(ActiveJob::Base) && is_a?(ActiveJob::Base)
-        adapter = self.class.queue_adapter
-        adapter_name = if adapter.is_a?(Class)
-          adapter.name
-        elsif adapter.respond_to?(:name)
-          adapter.name
-        else
-          adapter.class.name
-        end
-
-        return adapter_name.to_s.include?("Sidekiq")
+    # @return [Client] the configured client or a default client
+    # @api private
+    def async_http_client
+      unless self.class.asynchronous_http_requests_supported?
+        raise "Asynchronous HTTP requests are not supported with the #{self.class.queue_adapter_name} ActiveJob queue adapter"
       end
 
-      false
+      self.class.instance_variable_get(:@async_http_client) || Sidekiq::AsyncHttp::Client.new
     end
   end
 end

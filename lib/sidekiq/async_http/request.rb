@@ -108,7 +108,7 @@ module Sidekiq::AsyncHttp
       )
 
       # Run the request inline if Sidekiq::Testing.inline! is enabled
-      if async_disabled?
+      if synchronous || async_disabled?
         InlineRequest.new(task).execute
         return task.id
       end
