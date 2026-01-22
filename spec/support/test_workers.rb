@@ -24,6 +24,32 @@ module TestWorkers
     end
   end
 
+  class WorkerWithClient
+    include Sidekiq::AsyncHttp::Job
+
+    async_http_client base_url: "https://example.org", headers: {"X-Custom-Header" => "Test"}
+
+    @calls = []
+    @mutex = Mutex.new
+
+    class << self
+      attr_reader :calls
+
+      def reset_calls!
+        @mutex.synchronize { @calls = [] }
+      end
+
+      def record_call(response, *args)
+        @mutex.synchronize { @calls << [response, *args] }
+      end
+    end
+
+    def perform(endpoint)
+      response = async_get(endpoint)
+      self.class.record_call(response, endpoint)
+    end
+  end
+
   class CompletionWorker
     include Sidekiq::Job
 

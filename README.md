@@ -95,9 +95,9 @@ class ApiWorker
   include Sidekiq::AsyncHttp::Job
 
   # Configure a shared HTTP client with base URL and default headers
-  client base_url: "https://api.example.com",
-         headers: {"Authorization" => "Bearer #{ENV['API_KEY']}"},
-         timeout: 60
+  async_http_client base_url: "https://api.example.com",
+                    headers: {"Authorization" => "Bearer #{ENV['API_KEY']}"},
+                    timeout: 60
 
   # Callbacks receive the response/error plus original job arguments
   on_completion do |response, resource_type, resource_id|
@@ -141,30 +141,6 @@ class ActiveJobExample < ApplicationJob
 
   def perform(record_id)
     async_get("https://api.example.com/records/#{record_id}")
-  end
-end
-```
-
-### Making Different Types of Requests
-
-```ruby
-class WebhookWorker
-  include Sidekiq::AsyncHttp::Job
-
-  on_completion { |response, event_id| WebhookDelivery.mark_delivered(event_id) }
-  on_error { |error, event_id| WebhookDelivery.mark_failed(event_id, error.message) }
-
-  def perform(event_id)
-    event = Event.find(event_id)
-    webhook = event.webhook
-
-    # POST with JSON body
-    async_post(
-      webhook.url,
-      json: event.payload,
-      headers: {"X-Webhook-Signature" => sign_payload(event.payload, webhook.secret)},
-      timeout: 30
-    )
   end
 end
 ```
@@ -360,6 +336,9 @@ end
 ```
 
 You can register multiple callbacks; they will be called in the order registered.
+
+> [!NOTE]
+> These callbacks are not available when using through the ActiveJob interface.
 
 ## Shutdown Behavior
 
