@@ -830,7 +830,6 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
           - Async::TimeoutError → :timeout
           - OpenSSL::SSL::SSLError → :ssl
           - Errno::ECONNREFUSED, Errno::ECONNRESET, Errno::EHOSTUNREACH → :connection
-          - Async::HTTP::Protocol::Error → :protocol
           - else → :unknown
         - Implement #as_json with string keys
         - Implement .load class method
@@ -851,7 +850,6 @@ WebMock's default stubbing doesn't work out-of-box with `async-http`. Solutions:
 ```
           - OpenSSL::SSL::SSLError → :ssl
           - Errno::ECONNREFUSED, Errno::ECONNRESET, Errno::EHOSTUNREACH → :connection
-          - Async::HTTP::Protocol::Error → :protocol
           - else → :unknown
         - Implement #as_json with string keys
         - Implement .load class method

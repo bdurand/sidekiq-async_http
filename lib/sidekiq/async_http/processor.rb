@@ -518,7 +518,7 @@ module Sidekiq
         Async::HTTP::Protocol::Request.new(
           uri.scheme,                      # scheme
           uri.authority,                   # authority (host:port)
-          request.method.to_s.upcase,      # method
+          request.http_method.to_s.upcase,      # method
           uri.request_uri,                 # path
           nil,                             # version (nil = auto)
           headers,                         # headers
@@ -540,7 +540,7 @@ module Sidekiq
           duration: task.duration,
           request_id: task.id,
           url: task.request.url,
-          method: task.request.method
+          http_method: task.request.http_method
         )
       end
 

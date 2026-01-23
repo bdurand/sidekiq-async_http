@@ -12,7 +12,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
         duration: 0.123,
         request_id: "abc123",
         url: "https://example.com",
-        method: :get,
+        http_method: :get,
         protocol: "HTTP/1.1"
       )
 
@@ -24,7 +24,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
       expect(response.request_id).to eq("abc123")
       expect(response.protocol).to eq("HTTP/1.1")
       expect(response.url).to eq("https://example.com")
-      expect(response.method).to eq(:get)
+      expect(response.http_method).to eq(:get)
     end
 
     it "handles empty headers" do
@@ -35,7 +35,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
         duration: 0.05,
         request_id: "xyz789",
         url: "https://example.com/api",
-        method: :delete,
+        http_method: :delete,
         protocol: "HTTP/1.1"
       )
 
@@ -50,7 +50,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
         duration: 0.02,
         request_id: "no-body-456",
         url: "https://example.com/empty",
-        method: :get,
+        http_method: :get,
         protocol: "HTTP/1.1"
       )
 
@@ -60,160 +60,160 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
 
   describe "#success?" do
     it "returns true for 200 status" do
-      response = described_class.new(status: 200, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 200, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.success?).to be true
     end
 
     it "returns true for 201 status" do
-      response = described_class.new(status: 201, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :post, protocol: "HTTP/1.1")
+      response = described_class.new(status: 201, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :post, protocol: "HTTP/1.1")
       expect(response.success?).to be true
     end
 
     it "returns true for 299 status" do
-      response = described_class.new(status: 299, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 299, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.success?).to be true
     end
 
     it "returns false for 199 status" do
-      response = described_class.new(status: 199, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 199, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.success?).to be false
     end
 
     it "returns false for 300 status" do
-      response = described_class.new(status: 300, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 300, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.success?).to be false
     end
 
     it "returns false for 400 status" do
-      response = described_class.new(status: 400, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 400, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.success?).to be false
     end
 
     it "returns false for 500 status" do
-      response = described_class.new(status: 500, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 500, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.success?).to be false
     end
   end
 
   describe "#redirect?" do
     it "returns true for 300 status" do
-      response = described_class.new(status: 300, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 300, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.redirect?).to be true
     end
 
     it "returns true for 301 status" do
-      response = described_class.new(status: 301, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 301, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.redirect?).to be true
     end
 
     it "returns true for 302 status" do
-      response = described_class.new(status: 302, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 302, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.redirect?).to be true
     end
 
     it "returns true for 399 status" do
-      response = described_class.new(status: 399, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 399, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.redirect?).to be true
     end
 
     it "returns false for 299 status" do
-      response = described_class.new(status: 299, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 299, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.redirect?).to be false
     end
 
     it "returns false for 400 status" do
-      response = described_class.new(status: 400, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 400, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.redirect?).to be false
     end
   end
 
   describe "#client_error?" do
     it "returns true for 400 status" do
-      response = described_class.new(status: 400, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 400, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.client_error?).to be true
     end
 
     it "returns true for 404 status" do
-      response = described_class.new(status: 404, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 404, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.client_error?).to be true
     end
 
     it "returns true for 499 status" do
-      response = described_class.new(status: 499, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 499, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.client_error?).to be true
     end
 
     it "returns false for 399 status" do
-      response = described_class.new(status: 399, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 399, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.client_error?).to be false
     end
 
     it "returns false for 500 status" do
-      response = described_class.new(status: 500, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 500, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.client_error?).to be false
     end
   end
 
   describe "#server_error?" do
     it "returns true for 500 status" do
-      response = described_class.new(status: 500, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 500, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.server_error?).to be true
     end
 
     it "returns true for 502 status" do
-      response = described_class.new(status: 502, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 502, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.server_error?).to be true
     end
 
     it "returns true for 599 status" do
-      response = described_class.new(status: 599, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 599, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.server_error?).to be true
     end
 
     it "returns false for 499 status" do
-      response = described_class.new(status: 499, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 499, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.server_error?).to be false
     end
 
     it "returns false for 600 status" do
-      response = described_class.new(status: 600, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 600, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.server_error?).to be false
     end
   end
 
   describe "#error?" do
     it "returns true for 400 status" do
-      response = described_class.new(status: 400, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 400, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.error?).to be true
     end
 
     it "returns true for 404 status" do
-      response = described_class.new(status: 404, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 404, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.error?).to be true
     end
 
     it "returns true for 500 status" do
-      response = described_class.new(status: 500, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 500, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.error?).to be true
     end
 
     it "returns true for 599 status" do
-      response = described_class.new(status: 599, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 599, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.error?).to be true
     end
 
     it "returns false for 200 status" do
-      response = described_class.new(status: 200, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 200, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.error?).to be false
     end
 
     it "returns false for 300 status" do
-      response = described_class.new(status: 300, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 300, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.error?).to be false
     end
 
     it "returns false for 399 status" do
-      response = described_class.new(status: 399, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", method: :get, protocol: "HTTP/1.1")
+      response = described_class.new(status: 399, headers: {}, body: "", duration: 0.1, request_id: "1", url: "http://test.com", http_method: :get, protocol: "HTTP/1.1")
       expect(response.error?).to be false
     end
   end
@@ -228,7 +228,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
         duration: 0.1,
         request_id: "1",
         url: "http://test.com",
-        method: :get,
+        http_method: :get,
         protocol: "HTTP/1.1"
       )
 
@@ -244,7 +244,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
         duration: 0.1,
         request_id: "1",
         url: "http://test.com",
-        method: :get,
+        http_method: :get,
         protocol: "HTTP/1.1"
       )
 
@@ -259,7 +259,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
         duration: 0.1,
         request_id: "1",
         url: "http://test.com",
-        method: :get,
+        http_method: :get,
         protocol: "HTTP/1.1"
       )
 
@@ -274,7 +274,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
         duration: 0.1,
         request_id: "1",
         url: "http://test.com",
-        method: :get,
+        http_method: :get,
         protocol: "HTTP/1.1"
       )
 
@@ -289,7 +289,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
         duration: 0.1,
         request_id: "1",
         url: "http://test.com",
-        method: :get,
+        http_method: :get,
         protocol: "HTTP/1.1"
       )
 
@@ -306,7 +306,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
         duration: 0.456,
         request_id: "req-123",
         url: "https://api.example.com/items",
-        method: :post,
+        http_method: :post,
         protocol: "HTTP/2"
       )
 
@@ -320,7 +320,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
         "request_id" => "req-123",
         "protocol" => "HTTP/2",
         "url" => "https://api.example.com/items",
-        "method" => "post"
+        "http_method" => "post"
       })
     end
 
@@ -332,14 +332,14 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
         duration: 1.5,
         request_id: "xyz",
         url: "http://test.com",
-        method: :get,
+        http_method: :get,
         protocol: "HTTP/1.1"
       )
 
       hash = response.as_json
 
       expect(hash.keys).to contain_exactly(
-        "status", "headers", "body", "duration", "request_id", "protocol", "url", "method"
+        "status", "headers", "body", "duration", "request_id", "protocol", "url", "http_method"
       )
     end
 
@@ -351,7 +351,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
         duration: 0.2,
         request_id: "no-body",
         url: "http://test.com/nobody",
-        method: :get,
+        http_method: :get,
         protocol: "HTTP/1.1"
       )
 
@@ -371,7 +371,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
         "request_id" => "req-456",
         "protocol" => "HTTP/1.1",
         "url" => "https://example.com/page",
-        "method" => "get"
+        "http_method" => "get"
       }
 
       response = described_class.load(hash)
@@ -383,7 +383,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
       expect(response.request_id).to eq("req-456")
       expect(response.protocol).to eq("HTTP/1.1")
       expect(response.url).to eq("https://example.com/page")
-      expect(response.method).to eq(:get)
+      expect(response.http_method).to eq(:get)
     end
 
     it "round-trips through as_json" do
@@ -394,7 +394,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
         duration: 0.123,
         request_id: "original-id",
         url: "https://api.test.com/missing",
-        method: :delete,
+        http_method: :delete,
         protocol: "HTTP/1.1"
       )
 
@@ -408,7 +408,7 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
       expect(reconstructed.request_id).to eq(original.request_id)
       expect(reconstructed.protocol).to eq(original.protocol)
       expect(reconstructed.url).to eq(original.url)
-      expect(reconstructed.method).to eq(original.method)
+      expect(reconstructed.http_method).to eq(original.http_method)
     end
 
     it "supports a nil body" do
