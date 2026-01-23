@@ -244,5 +244,94 @@ RSpec.describe Sidekiq::AsyncHttp::ContinuationMiddleware do
       expect(responses).to be_empty
       expect(errors).to be_empty
     end
+
+    context "when processing retry continuation jobs" do
+      let(:retry_error_data) do
+        {
+          "class_name" => "Timeout::Error",
+          "message" => "Connection timed out",
+          "backtrace" => ["line 1", "line 2"],
+          "request_id" => "req-789",
+          "error_type" => "timeout",
+          "duration" => 1.5,
+          "url" => "https://api.example.com/slow",
+          "http_method" => "get"
+        }
+      end
+
+      let(:job) do
+        {
+          "class" => "TestWorker",
+          "jid" => "test-789",
+          "args" => ["original_arg1", "original_arg2"],
+          "async_http_continuation" => "retry",
+          "async_http_error" => retry_error_data
+        }
+      end
+
+      it "raises Error to trigger Sidekiq retry mechanism" do
+        expect {
+          middleware.call(worker, job, queue) {}
+        }.to raise_error(Sidekiq::AsyncHttp::Error) do |error|
+          expect(error.message).to eq("Connection timed out")
+          expect(error.error_class).to eq(Timeout::Error)
+          expect(error.request_id).to eq("req-789")
+          expect(error.url).to eq("https://api.example.com/slow")
+          expect(error.http_method).to eq(:get)
+          expect(error.error_type).to eq(:timeout)
+          expect(error.duration).to eq(1.5)
+          expect(error.backtrace).to eq(["line 1", "line 2"])
+        end
+      end
+
+      it "cleans up continuation markers from the job" do
+        begin
+          middleware.call(worker, job, queue) {}
+        rescue Sidekiq::AsyncHttp::Error
+          # Expected
+        end
+
+        expect(job).not_to have_key("async_http_continuation")
+        expect(job).not_to have_key("async_http_error")
+      end
+
+      it "handles missing error data gracefully" do
+        job_without_error = {
+          "class" => "TestWorker",
+          "jid" => "test-789",
+          "args" => ["original_arg1"],
+          "async_http_continuation" => "retry",
+          "async_http_error" => {
+            "class_name" => "StandardError",
+            "message" => "Unknown error",
+            "backtrace" => [],
+            "error_type" => "unknown",
+            "duration" => 0,
+            "url" => nil,
+            "http_method" => nil,
+            "request_id" => nil
+          }
+        }
+
+        expect {
+          middleware.call(worker, job_without_error, queue) {}
+        }.to raise_error(Sidekiq::AsyncHttp::Error) do |error|
+          expect(error.message).to eq("Unknown error")
+        end
+      end
+
+      it "does not yield when raising retry error" do
+        yielded = false
+        begin
+          middleware.call(worker, job, queue) do
+            yielded = true
+          end
+        rescue Sidekiq::AsyncHttp::Error
+          # Expected
+        end
+
+        expect(yielded).to be false
+      end
+    end
   end
 end

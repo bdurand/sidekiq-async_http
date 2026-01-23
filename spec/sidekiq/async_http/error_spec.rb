@@ -152,19 +152,29 @@ RSpec.describe Sidekiq::AsyncHttp::Error do
       )
     end
 
-    it "returns hash with string keys" do
+    it "returns hash with compressed backtrace" do
       hash = error.as_json
 
-      expect(hash).to eq({
-        "class_name" => "StandardError",
-        "message" => "Test error",
-        "backtrace" => ["line 1", "line 2"],
-        "request_id" => "req_123",
-        "error_type" => "timeout",
-        "duration" => 2.5,
-        "url" => "https://example.com",
-        "http_method" => "get"
-      })
+      expect(hash["class_name"]).to eq("StandardError")
+      expect(hash["message"]).to eq("Test error")
+      expect(hash["backtrace_compressed"]).to be_a(String)
+      expect(hash["backtrace_compressed"]).not_to be_empty
+      expect(hash["request_id"]).to eq("req_123")
+      expect(hash["error_type"]).to eq("timeout")
+      expect(hash["duration"]).to eq(2.5)
+      expect(hash["url"]).to eq("https://example.com")
+      expect(hash["http_method"]).to eq("get")
+    end
+
+    it "compresses backtrace using gzip and base64" do
+      hash = error.as_json
+
+      # Decompress and decode to verify
+      compressed = hash["backtrace_compressed"].unpack1("m0")
+      decompressed = Zlib::Inflate.inflate(compressed)
+      backtrace = JSON.parse(decompressed)
+
+      expect(backtrace).to eq(["line 1", "line 2"])
     end
 
     it "converts error_type to string" do
@@ -175,10 +185,14 @@ RSpec.describe Sidekiq::AsyncHttp::Error do
 
   describe ".load" do
     let(:hash) do
+      backtrace = ["line 1", "line 2"]
+      backtrace_json = JSON.generate(backtrace)
+      compressed = Zlib::Deflate.deflate(backtrace_json)
+
       {
         "class_name" => "StandardError",
         "message" => "Test error",
-        "backtrace" => ["line 1", "line 2"],
+        "backtrace_compressed" => [compressed].pack("m0"),
         "request_id" => "req_123",
         "error_type" => "timeout",
         "duration" => 2.5,
@@ -187,7 +201,7 @@ RSpec.describe Sidekiq::AsyncHttp::Error do
       }
     end
 
-    it "reconstructs error from hash" do
+    it "reconstructs error from hash with compressed backtrace" do
       error = described_class.load(hash)
 
       expect(error.error_class).to eq(StandardError)
@@ -198,6 +212,22 @@ RSpec.describe Sidekiq::AsyncHttp::Error do
       expect(error.duration).to eq(2.5)
       expect(error.url).to eq("https://example.com")
       expect(error.http_method).to eq(:get)
+    end
+
+    it "handles legacy format with uncompressed backtrace" do
+      legacy_hash = {
+        "class_name" => "StandardError",
+        "message" => "Test error",
+        "backtrace" => ["line 1", "line 2"],
+        "request_id" => "req_123",
+        "error_type" => "timeout",
+        "duration" => 2.5,
+        "url" => "https://example.com",
+        "http_method" => "get"
+      }
+
+      error = described_class.load(legacy_hash)
+      expect(error.backtrace).to eq(["line 1", "line 2"])
     end
 
     it "converts error_type string to symbol" do

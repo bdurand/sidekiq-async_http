@@ -123,10 +123,30 @@ module Sidekiq::AsyncHttp
       Sidekiq::Client.push(@sidekiq_job)
     end
 
-    # Retry the original Sidekiq job with incremented retry count
+    # Retry the original Sidekiq job through Sidekiq's retry mechanism.
+    #
+    # This works by storing error information in the job and marking it for retry.
+    # When the job is processed, {ContinuationMiddleware} detects the retry marker
+    # and re-raises the exception as an {Error}, allowing Sidekiq's built-in
+    # {Sidekiq::JobRetry} middleware to handle all retry logic including:
+    # - Exponential backoff with jitter
+    # - Retry count tracking and limits
+    # - Error metadata (error_message, error_class, failed_at, retried_at)
+    # - Death handlers and dead job queue when retries are exhausted
+    # - Integration with sidekiq_retries_exhausted callbacks
+    #
+    # @param exception [Exception] the exception that caused the failure
     # @return [String] job ID
-    def retry_job
-      @sidekiq_job["retry_count"] = (@sidekiq_job["retry_count"] || 0) + 1
+    def retry_job(exception)
+      error = Error.from_exception(
+        exception,
+        request_id: @id,
+        duration: duration,
+        url: request.url,
+        http_method: request.http_method
+      )
+      @sidekiq_job["async_http_continuation"] = "retry"
+      @sidekiq_job["async_http_error"] = error.as_json
       Sidekiq::Client.push(@sidekiq_job)
     end
 
@@ -163,7 +183,7 @@ module Sidekiq::AsyncHttp
         # Re-enqueue the original job only if it's not already a continuation
         # This prevents infinite loops in inline mode
         unless @sidekiq_job["async_http_continuation"]
-          retry_job
+          retry_job(exception)
         end
       end
     end

@@ -173,56 +173,78 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
   end
 
   describe "#retry_job" do
-    it "increments retry count and re-enqueues" do
+    let(:exception) { StandardError.new("Connection timeout") }
+
+    it "marks the job for retry with error info and re-enqueues" do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
         completion_worker: completion_worker
       )
+      task.started!
+      task.completed!
 
       expect(Sidekiq::Client).to receive(:push) do |job|
-        expect(job["retry_count"]).to eq(1)
+        expect(job["async_http_continuation"]).to eq("retry")
+        expect(job["async_http_error"]).to include(
+          "class_name" => "StandardError",
+          "message" => "Connection timeout",
+          "request_id" => task.id,
+          "url" => "https://api.example.com/users",
+          "http_method" => "get",
+          "error_type" => "unknown"
+        )
         expect(job["class"]).to eq("TestWorkers::Worker")
         expect(job["args"]).to eq([1, 2, 3])
         "new-jid"
       end
 
-      result = task.retry_job
+      result = task.retry_job(exception)
       expect(result).to eq("new-jid")
     end
 
-    it "increments existing retry count" do
-      job_with_retry = sidekiq_job.merge("retry_count" => 3)
+    it "includes backtrace in error data" do
       task = described_class.new(
         request: request,
-        sidekiq_job: job_with_retry,
+        sidekiq_job: sidekiq_job,
         completion_worker: completion_worker
       )
+      task.started!
 
-      expect(Sidekiq::Client).to receive(:push) do |job|
-        expect(job["retry_count"]).to eq(4)
-        "new-jid"
+      begin
+        raise StandardError, "Test error"
+      rescue => e
+        expect(Sidekiq::Client).to receive(:push) do |job|
+          expect(job["async_http_error"]["backtrace_compressed"]).to be_a(String)
+          expect(job["async_http_error"]["backtrace_compressed"]).not_to be_empty
+
+          # Verify it can be decompressed
+          error = Sidekiq::AsyncHttp::Error.load(job["async_http_error"])
+          expect(error.backtrace).to be_an(Array)
+          expect(error.backtrace).not_to be_empty
+          "new-jid"
+        end
+
+        task.retry_job(e)
       end
-
-      task.retry_job
     end
 
-    it "starts retry count at 1 when not present" do
-      job_without_retry = sidekiq_job.dup
-      job_without_retry.delete("retry_count")
-
+    it "categorizes error types correctly" do
       task = described_class.new(
         request: request,
-        sidekiq_job: job_without_retry,
+        sidekiq_job: sidekiq_job,
         completion_worker: completion_worker
       )
+      task.started!
+
+      timeout_error = Async::TimeoutError.new("Request timed out")
 
       expect(Sidekiq::Client).to receive(:push) do |job|
-        expect(job["retry_count"]).to eq(1)
+        expect(job["async_http_error"]["error_type"]).to eq("timeout")
         "new-jid"
       end
 
-      task.retry_job
+      task.retry_job(timeout_error)
     end
   end
 
@@ -280,12 +302,15 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
         sidekiq_job: sidekiq_job,
         completion_worker: "TestWorkers::CompletionWorker"
       )
+      task.started!
       task.completed!
 
       exception = StandardError.new("Something went wrong")
 
       expect(Sidekiq::Client).to receive(:push) do |job|
-        expect(job["retry_count"]).to eq(1)
+        expect(job["async_http_continuation"]).to eq("retry")
+        expect(job["async_http_error"]["class_name"]).to eq("StandardError")
+        expect(job["async_http_error"]["message"]).to eq("Something went wrong")
         expect(job["class"]).to eq("TestWorkers::Worker")
         expect(job["args"]).to eq([1, 2, 3])
         "new-jid"

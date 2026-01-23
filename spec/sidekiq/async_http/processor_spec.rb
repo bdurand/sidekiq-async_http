@@ -1070,7 +1070,14 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
 
       expect(TestWorkers::ErrorWorker.jobs.size).to eq(1)
       error_hash = TestWorkers::ErrorWorker.jobs.last["args"].first
-      expect(error_hash["backtrace"]).to eq(["line 1", "line 2", "line 3"])
+
+      # Verify backtrace is compressed
+      expect(error_hash["backtrace_compressed"]).to be_a(String)
+      expect(error_hash["backtrace_compressed"]).not_to be_empty
+
+      # Verify it decompresses correctly
+      error = Sidekiq::AsyncHttp::Error.load(error_hash)
+      expect(error.backtrace).to eq(["line 1", "line 2", "line 3"])
     end
   end
 

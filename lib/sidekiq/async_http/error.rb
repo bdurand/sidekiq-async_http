@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "zlib"
+
 module Sidekiq
   module AsyncHttp
     # Error object representing an exception from making an HTTP request. Note that this
@@ -31,10 +33,17 @@ module Sidekiq
         # @param hash [Hash] hash representation
         # @return [Error] reconstructed error
         def load(hash)
+          backtrace = if hash["backtrace_compressed"]
+            compressed = hash["backtrace_compressed"].unpack1("m0")
+            JSON.parse(Zlib::Inflate.inflate(compressed))
+          else
+            hash["backtrace"]
+          end
+
           new(
             class_name: hash["class_name"],
             message: hash["message"],
-            backtrace: hash["backtrace"],
+            backtrace: backtrace,
             request_id: hash["request_id"],
             error_type: hash["error_type"]&.to_sym,
             duration: hash["duration"],
@@ -113,10 +122,15 @@ module Sidekiq
       # Convert to hash with string keys for serialization
       # @return [Hash] hash representation
       def as_json
+        # Compress and encode backtrace to reduce Redis storage
+        backtrace_json = JSON.generate(backtrace || [])
+        compressed = Zlib::Deflate.deflate(backtrace_json)
+        backtrace_compressed = [compressed].pack("m0")
+
         {
           "class_name" => @class_name,
           "message" => message,
-          "backtrace" => backtrace,
+          "backtrace_compressed" => backtrace_compressed,
           "request_id" => request_id,
           "error_type" => error_type.to_s,
           "duration" => duration,
