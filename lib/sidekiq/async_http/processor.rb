@@ -487,12 +487,28 @@ module Sidekiq
       # @param request [Request] the request object
       # @return [Async::HTTP::Client] the async HTTP client
       def http_client(request)
-        endpoint = Async::HTTP::Endpoint.parse(
+        endpoint = create_endpoint(request)
+        client = Async::HTTP::Client.new(endpoint)
+        wrap_client(client)
+      end
+
+      # Create an endpoint for the request.
+      #
+      # @param request [Request] the request object
+      # @return [Async::HTTP::Endpoint] the endpoint
+      def create_endpoint(request)
+        Async::HTTP::Endpoint.parse(
           request.url,
           connect_timeout: request.connect_timeout,
           idle_timeout: @config.idle_connection_timeout
         )
-        client = Async::HTTP::Client.new(endpoint)
+      end
+
+      # Wrap the client with middleware.
+      #
+      # @param client [Async::HTTP::Client] the client
+      # @return [Protocol::HTTP::AcceptEncoding] the wrapped client
+      def wrap_client(client)
         Protocol::HTTP::AcceptEncoding.new(client)
       end
 
