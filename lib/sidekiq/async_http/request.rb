@@ -40,8 +40,8 @@ module Sidekiq::AsyncHttp
     # @param body [String, nil] Request body.
     # @param timeout [Float, nil] Overall timeout in seconds.
     # @param connect_timeout [Float, nil] Connect timeout in seconds.
-    def initialize(method, url, headers: {}, body: nil, timeout: nil, connect_timeout: nil)
-      @http_method = method.is_a?(String) ? method.downcase.to_sym : method
+    def initialize(http_method, url, headers: {}, body: nil, timeout: nil, connect_timeout: nil)
+      @http_method = http_method.is_a?(String) ? http_method.downcase.to_sym : http_method
       @url = url.is_a?(URI::Generic) ? url.to_s : url
       @headers = headers.is_a?(HttpHeaders) ? headers : HttpHeaders.new(headers)
       if Sidekiq::AsyncHttp.configuration.user_agent
