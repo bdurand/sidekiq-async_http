@@ -4,8 +4,6 @@ require "concurrent"
 require "async"
 require "async/queue"
 require "async/http"
-require "protocol/http/accept_encoding"
-
 module Sidekiq
   module AsyncHttp
     # Core processor that handles async HTTP requests in a dedicated thread
