@@ -95,12 +95,16 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
     end
 
     it "resets the shutdown barrier" do
-      barrier = processor.instance_variable_get(:@shutdown_barrier)
-      barrier.set
-      expect(barrier).to be_set
+      lifecycle = processor.instance_variable_get(:@lifecycle)
+      # Transition to running then stopping to signal shutdown
+      lifecycle.start!
+      lifecycle.running!
+      lifecycle.stop!  # This sets the shutdown barrier
+      expect(lifecycle.shutdown_signaled?).to be true
 
-      processor.start
-      expect(barrier).not_to be_set
+      lifecycle.stopped!  # Reset to stopped
+      lifecycle.start!    # This should reset the barrier
+      expect(lifecycle.shutdown_signaled?).to be false
     end
   end
 
@@ -126,9 +130,9 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       end
 
       it "signals the shutdown barrier" do
-        barrier = processor.instance_variable_get(:@shutdown_barrier)
+        lifecycle = processor.instance_variable_get(:@lifecycle)
         processor.stop
-        expect(barrier).to be_set
+        expect(lifecycle.shutdown_signaled?).to be true
       end
 
       context "with timeout" do
@@ -219,11 +223,13 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
 
     context "when stopping" do
       it "raises an error" do
-        state = processor.instance_variable_get(:@state)
-        state.set(:stopping)
+        lifecycle = processor.instance_variable_get(:@lifecycle)
+        lifecycle.start!
+        lifecycle.running!
+        lifecycle.stop!
         expect { processor.enqueue(request) }.to raise_error(Sidekiq::AsyncHttp::NotRunningError, /Cannot enqueue request: processor is stopping/)
       ensure
-        state&.set(:stopped)
+        lifecycle&.stopped!
       end
     end
   end
@@ -269,7 +275,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
     describe "#stopping?" do
       it "returns true when state is stopping" do
         processor.run do
-          processor.instance_variable_get(:@state).set(:stopping)
+          processor.instance_variable_get(:@lifecycle).stop!
           expect(processor.stopping?).to be true
         end
       end
@@ -420,7 +426,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
 
         threads.each(&:join)
 
-        expect(results).to all(satisfy { |state| described_class::STATES.include?(state) })
+        expect(results).to all(satisfy { |state| Sidekiq::AsyncHttp::LifecycleManager::STATES.include?(state) })
         expect(results.size).to eq(1000)
       end
     end
@@ -613,8 +619,9 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
     # @param headers [Hash] response headers (default: {})
     # @param protocol [String] HTTP protocol version (default: "HTTP/2")
     def stub_http_response(status: 200, body: "response body", headers: {}, protocol: "HTTP/2")
-      # Stub the processor to return our mock client
-      allow(processor).to receive(:wrap_client).and_return(client)
+      # Stub the factory to return our mock client
+      http_client_factory = processor.instance_variable_get(:@http_client_factory)
+      allow(http_client_factory).to receive(:build).and_return(client)
 
       # Set up the HTTP call
       allow(client).to receive(:call).and_return(async_response)
@@ -730,15 +737,6 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       end
     end
 
-    it "classifies errors correctly" do
-      expect(processor.send(:classify_error, Async::TimeoutError.new)).to eq(:timeout)
-      expect(processor.send(:classify_error, Sidekiq::AsyncHttp::ResponseTooLargeError.new)).to eq(:response_too_large)
-      expect(processor.send(:classify_error, OpenSSL::SSL::SSLError.new)).to eq(:ssl)
-      expect(processor.send(:classify_error, Errno::ECONNREFUSED.new)).to eq(:connection)
-      expect(processor.send(:classify_error, Errno::ECONNRESET.new)).to eq(:connection)
-      expect(processor.send(:classify_error, StandardError.new)).to eq(:unknown)
-    end
-
     it "raises ResponseTooLargeError when content-length exceeds max" do
       stub_http_response(headers: {"content-length" => "20000000"})
 
@@ -830,44 +828,25 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       end
     end
 
-    it "uses idle_connection_timeout from configuration" do
-      captured_options = nil
-      endpoint = double("Endpoint", url: mock_request.request.url).as_null_object
+    it "passes request to http_client_factory" do
+      http_client_factory = processor.instance_variable_get(:@http_client_factory)
+      captured_request = nil
 
-      allow(Async::HTTP::Endpoint).to receive(:parse) do |url, options|
-        captured_options = options
-        endpoint
+      allow(http_client_factory).to receive(:build) do |request|
+        captured_request = request
+        client
       end
-
-      stub_http_response
+      allow(client).to receive(:call).and_return(async_response)
+      stub_async_response_body("response body")
+      allow(async_response).to receive(:status).and_return(200)
+      allow(async_response).to receive(:headers).and_return(stub_headers({}))
+      allow(async_response).to receive(:protocol).and_return("HTTP/2")
 
       Async do
         processor.send(:process_request, mock_request)
       end
 
-      expect(captured_options[:idle_timeout]).to eq(config.idle_connection_timeout)
-    end
-
-    it "uses connect_timeout from request when provided" do
-      request_with_timeout = create_request_task(
-        connect_timeout: 5.0
-      )
-
-      captured_options = nil
-      endpoint = double("Endpoint", url: request_with_timeout.request.url).as_null_object
-
-      allow(Async::HTTP::Endpoint).to receive(:parse) do |url, options|
-        captured_options = options
-        endpoint
-      end
-
-      stub_http_response
-
-      Async do
-        processor.send(:process_request, request_with_timeout)
-      end
-
-      expect(captured_options[:connect_timeout]).to eq(5.0)
+      expect(captured_request).to eq(mock_request.request)
     end
 
     it "uses default_request_timeout from configuration when request timeout is nil" do

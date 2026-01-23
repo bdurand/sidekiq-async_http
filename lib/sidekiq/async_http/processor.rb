@@ -12,12 +12,9 @@ module Sidekiq
     class Processor
       include TimeHelper
 
-      STATES = %i[stopped running draining stopping].freeze
-
       # Timing constants for the reactor loop
       DEQUEUE_TIMEOUT = 1.0          # Seconds to wait when dequeueing requests
       INFLIGHT_UPDATE_INTERVAL = 5   # Seconds between inflight stats updates
-      SHUTDOWN_POLL_INTERVAL = 0.001 # Seconds to sleep while polling during shutdown
 
       # @return [Configuration] the configuration object for the processor
       attr_reader :config
@@ -38,19 +35,20 @@ module Sidekiq
       # @return [void]
       def initialize(config = nil)
         @config = config || Sidekiq::AsyncHttp.configuration
+        @http_client_factory = HttpClientFactory.new(@config)
+        @request_builder = RequestBuilder.new(@config)
+        @response_reader = ResponseReader.new(@config)
+        @lifecycle = LifecycleManager.new
         @metrics = Metrics.new
         @stats = Stats.new(@config)
         @inflight_registry = InflightRegistry.new(@config)
         @queue = Thread::Queue.new
-        @state = Concurrent::AtomicReference.new(:stopped)
         @reactor_thread = nil
         @monitor_thread = MonitorThread.new(
           @config,
           @inflight_registry,
           -> { @tasks_lock.synchronize { @inflight_requests.keys } }
         )
-        @shutdown_barrier = Concurrent::Event.new
-        @reactor_ready = Concurrent::Event.new
         @inflight_requests = Concurrent::Hash.new
         @pending_tasks = Concurrent::Hash.new
         @tasks_lock = Mutex.new
@@ -62,10 +60,7 @@ module Sidekiq
       # @return [void]
       def start
         @tasks_lock.synchronize do
-          return if starting? || running? || stopping?
-          @state.set(:starting)
-          @shutdown_barrier.reset
-          @reactor_ready.reset
+          return unless @lifecycle.start!
         end
 
         @reactor_thread = Thread.new do
@@ -78,15 +73,15 @@ module Sidekiq
           raise if AsyncHttp.testing?
         ensure
           if @reactor_thread == Thread.current
-            @tasks_lock.synchronize { @state.set(:stopped) }
+            @tasks_lock.synchronize { @lifecycle.stopped! }
           end
         end
 
         @monitor_thread.start
-        @tasks_lock.synchronize { @state.set(:running) }
+        @tasks_lock.synchronize { @lifecycle.running! }
 
         # Block until the reactor is ready
-        @reactor_ready.wait
+        @lifecycle.wait_for_reactor
       end
 
       # Stop the processor.
@@ -97,12 +92,8 @@ module Sidekiq
         # Atomically transition to stopping state under lock to ensure consistency
         # with other state-checking operations
         @tasks_lock.synchronize do
-          return if stopped? || stopping? || starting?
-          @state.set(:stopping)
+          return unless @lifecycle.stop!
         end
-
-        # Signal the reactor thread to stop accepting new requests
-        @shutdown_barrier.set
 
         # Interrupt the reactor's queue wait by pushing a sentinel value
         @queue.push(nil)
@@ -111,7 +102,7 @@ module Sidekiq
         if timeout && timeout > 0
           deadline = monotonic_time + timeout
           while !idle? && monotonic_time < deadline
-            sleep(SHUTDOWN_POLL_INTERVAL)
+            sleep(LifecycleManager::POLL_INTERVAL)
           end
         end
 
@@ -119,7 +110,7 @@ module Sidekiq
         tasks_to_reenqueue = []
         @tasks_lock.synchronize do
           # Now that we have the lock again, atomically transition to stopped and clear collections
-          @state.set(:stopped)
+          @lifecycle.stopped!
           tasks_to_reenqueue = @inflight_requests.values + @pending_tasks.values
           @inflight_requests.clear
           @pending_tasks.clear
@@ -158,9 +149,7 @@ module Sidekiq
       # @return [void]
       def drain
         @tasks_lock.synchronize do
-          return unless running?
-
-          @state.set(:draining)
+          return unless @lifecycle.drain!
         end
 
         @config.logger&.info("[Sidekiq::AsyncHttp] Processor draining (no longer accepting new requests)")
@@ -188,53 +177,53 @@ module Sidekiq
         @queue.push(task)
       end
 
-      # Get the current processor status.
+      # Get the current processor state.
       #
-      # @return [Symbol] the current status
-      def status
-        @state.get
+      # @return [Symbol] the current state
+      def state
+        @lifecycle.state
       end
 
       # Check if processor is starting.
       #
       # @return [Boolean]
       def starting?
-        state == :starting
+        @lifecycle.starting?
       end
 
       # Check if processor is running.
       #
       # @return [Boolean]
       def running?
-        state == :running
+        @lifecycle.running?
       end
 
       # Check if processor is stopped.
       #
       # @return [Boolean]
       def stopped?
-        state == :stopped
+        @lifecycle.stopped?
       end
 
       # Check if processor is draining.
       #
       # @return [Boolean]
       def draining?
-        state == :draining
+        @lifecycle.draining?
       end
 
       # Check if processor is drained (draining and idle).
       #
       # @return [Boolean]
       def drained?
-        state == :draining && idle?
+        @lifecycle.draining? && idle?
       end
 
       # Check if processor is stopping.
       #
       # @return [Boolean]
       def stopping?
-        state == :stopping
+        @lifecycle.stopping?
       end
 
       # Check if processor is idle (no queued or in-flight requests).
@@ -244,13 +233,6 @@ module Sidekiq
         @tasks_lock.synchronize do
           @queue.empty? && @pending_tasks.empty? && @inflight_requests.empty?
         end
-      end
-
-      # Get current state.
-      #
-      # @return [Symbol]
-      def state
-        @state.get
       end
 
       # Get the number of in-flight requests.
@@ -267,12 +249,7 @@ module Sidekiq
       # @api private
       def wait_for_running(timeout: 5)
         start
-        deadline = monotonic_time + timeout
-        while monotonic_time <= deadline
-          return true if running?
-          sleep(SHUTDOWN_POLL_INTERVAL)
-        end
-        false
+        @lifecycle.wait_for_running(timeout: timeout)
       end
 
       # Wait for the queue to be empty and all in-flight requests to complete.
@@ -282,12 +259,7 @@ module Sidekiq
       # @return [Boolean] true if processing completed, false if timeout reached
       # @api private
       def wait_for_idle(timeout: 1)
-        deadline = monotonic_time + timeout
-        while monotonic_time <= deadline
-          return true if idle?
-          sleep(SHUTDOWN_POLL_INTERVAL)
-        end
-        false
+        @lifecycle.wait_for_idle(timeout: timeout) { idle? }
       end
 
       # Wait for at least one request to start processing. This is mainly for use in tests.
@@ -296,12 +268,9 @@ module Sidekiq
       # @return [Boolean] true if a request started processing, false if timeout reached
       # @api private
       def wait_for_processing(timeout: 1)
-        deadline = monotonic_time + timeout
-        while monotonic_time <= deadline
-          return true if !@inflight_requests.empty? || !@pending_tasks.empty?
-          sleep(SHUTDOWN_POLL_INTERVAL)
+        @lifecycle.wait_for_processing(timeout: timeout) do
+          !@inflight_requests.empty? || !@pending_tasks.empty?
         end
-        false
       end
 
       # Run the processor in a block. This is intended for use in tests to
@@ -325,7 +294,7 @@ module Sidekiq
       def run_reactor
         Async do |task|
           # Signal that the reactor is ready
-          @reactor_ready.set
+          @lifecycle.reactor_ready!
 
           @config.logger&.info("[Sidekiq::AsyncHttp] Processor started")
 
@@ -403,15 +372,15 @@ module Sidekiq
         @metrics.record_request_start
 
         begin
-          client = http_client(task.request)
-          http_request = build_http_request(task.request)
+          client = @http_client_factory.build(task.request)
+          http_request = @request_builder.build(task.request)
           http_request.headers.add("x-request-id", task.id)
 
           # Execute with timeout
           response_data = Async::Task.current.with_timeout(task.request.timeout || @config.default_request_timeout) do
             async_response = client.call(http_request)
             headers_hash = async_response.headers.to_h
-            body = read_response_body(async_response, headers_hash) unless stopping? || stopped?
+            body = @response_reader.read_body(async_response, headers_hash) unless stopping? || stopped?
 
             # Build response object
             {
@@ -425,11 +394,11 @@ module Sidekiq
           return if stopping? || stopped?
 
           task.completed!
-          response = build_response(task, response_data)
+          response = @response_reader.build_response(task, response_data)
           handle_success(task, response)
         rescue => e
           task.completed!
-          error_type = classify_error(e)
+          error_type = Error.error_type(e)
           @metrics.record_error(error_type)
           @stats.record_error(error_type)
           handle_error(task, e)
@@ -442,147 +411,6 @@ module Sidekiq
           @stats.record_request(task.duration)
 
           @testing_callback&.call(task) if AsyncHttp.testing?
-        end
-      end
-
-      # Read response body with size validation.
-      #
-      # Reads the async HTTP response body asynchronously to completion, which allows
-      # the connection to be reused. The async-http client handles connection pooling
-      # and keep-alive internally. Using iteration instead of read() ensures non-blocking
-      # I/O that yields to the reactor.
-      #
-      # @param async_response [Async::HTTP::Protocol::Response] the async HTTP response
-      # @param headers_hash [Hash] the response headers
-      # @return [String, nil] the response body or nil if no body present
-      # @raise [ResponseTooLargeError] if body exceeds max_response_size
-      def read_response_body(async_response, headers_hash)
-        return nil unless async_response.body
-
-        # Check content-length header if present
-        content_length = headers_hash["content-length"]&.to_i
-        if content_length && content_length > @config.max_response_size
-          raise ResponseTooLargeError.new(
-            "Response body size (#{content_length} bytes) exceeds maximum allowed size (#{@config.max_response_size} bytes)"
-          )
-        end
-
-        # Read body while checking size
-        chunks = []
-        total_size = 0
-        async_response.body.each do |chunk|
-          total_size += chunk.bytesize
-          if total_size > @config.max_response_size
-            raise ResponseTooLargeError.new(
-              "Response body size exceeded maximum allowed size (#{@config.max_response_size} bytes)"
-            )
-          end
-          chunks << chunk
-        end
-        chunks.join
-      end
-
-      # Create an Async::HTTP::Client for the given request.
-      #
-      # @param request [Request] the request object
-      # @return [Async::HTTP::Client] the async HTTP client
-      def http_client(request)
-        endpoint = create_endpoint(request)
-        client = Async::HTTP::Client.new(endpoint)
-        wrap_client(client)
-      end
-
-      # Create an endpoint for the request.
-      #
-      # @param request [Request] the request object
-      # @return [Async::HTTP::Endpoint] the endpoint
-      def create_endpoint(request)
-        Async::HTTP::Endpoint.parse(
-          request.url,
-          connect_timeout: request.connect_timeout,
-          idle_timeout: @config.idle_connection_timeout
-        )
-      end
-
-      # Wrap the client with middleware.
-      #
-      # @param client [Async::HTTP::Client] the client
-      # @return [Protocol::HTTP::AcceptEncoding] the wrapped client
-      def wrap_client(client)
-        Protocol::HTTP::AcceptEncoding.new(client)
-      end
-
-      # Build an Async::HTTP::Request from our Request object.
-      #
-      # @param request [Request] the request object
-      # @return [Async::HTTP::Request] the async HTTP request
-      def build_http_request(request)
-        uri = URI.parse(request.url)
-
-        # Create headers - must be a Protocol::HTTP::Headers object, not a Hash
-        headers = Protocol::HTTP::Headers.new
-        (request.headers || {}).each do |key, value|
-          headers.add(key, value)
-        end
-
-        if request.headers["user-agent"].nil?
-          user_agent = @config.user_agent&.to_s || "sidekiq-async_http"
-          headers.add("user-agent", user_agent)
-        end
-
-        # Set body if present - use Protocol::HTTP::Body::Buffered for proper handling
-        body_content = if request.body
-          body_bytes = request.body.to_s
-          # Protocol::HTTP::Body::Buffered will automatically set Content-Length
-          Protocol::HTTP::Body::Buffered.wrap([body_bytes])
-        end
-
-        # Build the request with correct parameter order: scheme, authority, method, path, version, headers, body
-        Async::HTTP::Protocol::Request.new(
-          uri.scheme,                      # scheme
-          uri.authority,                   # authority (host:port)
-          request.http_method.to_s.upcase,      # method
-          uri.request_uri,                 # path
-          nil,                             # version (nil = auto)
-          headers,                         # headers
-          body_content                     # body
-        )
-      end
-
-      # Build a Response object from async response data.
-      #
-      # @param task [RequestTask] the original request task
-      # @param http_response [Hash] the response data
-      # @return [Response] the response object
-      def build_response(task, http_response)
-        Response.new(
-          status: http_response[:status],
-          headers: http_response[:headers],
-          body: http_response[:body],
-          protocol: http_response[:protocol],
-          duration: task.duration,
-          request_id: task.id,
-          url: task.request.url,
-          http_method: task.request.http_method
-        )
-      end
-
-      # Classify an error by type.
-      #
-      # @param exception [Exception] the exception
-      # @return [Symbol] the error type
-      def classify_error(exception)
-        case exception
-        when Async::TimeoutError
-          :timeout
-        when ResponseTooLargeError
-          :response_too_large
-        when OpenSSL::SSL::SSLError
-          :ssl
-        when Errno::ECONNREFUSED, Errno::ECONNRESET, Errno::EHOSTUNREACH, Errno::ENETUNREACH
-          :connection
-        else
-          :unknown
         end
       end
 

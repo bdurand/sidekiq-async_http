@@ -127,6 +127,17 @@ RSpec.describe Sidekiq::AsyncHttp::Error do
     end
   end
 
+  describe ".error_type" do
+    it "classifies errors correctly" do
+      expect(described_class.error_type(Async::TimeoutError.new)).to eq(:timeout)
+      expect(described_class.error_type(Sidekiq::AsyncHttp::ResponseTooLargeError.new)).to eq(:response_too_large)
+      expect(described_class.error_type(OpenSSL::SSL::SSLError.new)).to eq(:ssl)
+      expect(described_class.error_type(Errno::ECONNREFUSED.new)).to eq(:connection)
+      expect(described_class.error_type(Errno::ECONNRESET.new)).to eq(:connection)
+      expect(described_class.error_type(StandardError.new)).to eq(:unknown)
+    end
+  end
+
   describe "#as_json" do
     let(:error) do
       described_class.new(
