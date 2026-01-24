@@ -81,10 +81,10 @@ end
 
 The processor starts automatically with Sidekiq. When the HTTP request completes, your `on_completion` will be executed as a new Sidekiq job with the [response](Sidekiq::AsyncHttp::Response) and the original job arguments.
 
-If an error is raised during the request, the `on_error` callback will be executed instead with the [error](Sidekiq::AsyncHttp::Error) information and the original job arguments. If no `on_error` is defined, the original job will be retried according to Sidekiq's retry rules.
+If an error is raised during the request, the `on_error` callback will be executed instead with the [error](Sidekiq::AsyncHttp::Error) information and the original job arguments.
 
 > [!IMPORTANT]
-> If you provide an `on_error` callback, do not re-raise the error as a mechanism for retrying the job. That will just result in the error callback job being retried instead. If you want to retry the original job from an `on_error` callback, you can call `perform_in` or `perform_async` from within the `on_error` callback. Be careful with this approach, though, as it can lead to infinite retry loops if the error condition is not resolved.
+> Do not re-raise the error as a mechanism in the error callback as a means to retry the job. That will just result in the error callback job being retried instead. If you want to retry the original job from an `on_error` callback, you can call `perform_in` or `perform_async` from within the `on_error` callback. Be careful with this approach, though, as it can lead to infinite retry loops if the error condition is not resolved.
 >
 > Also note that the error callback is only called when an exception is raised during the HTTP request (timeout, connection failure, etc). HTTP error status codes (4xx, 5xx) do not trigger the error callback. Instead, they are treated as completed requests and passed to the `on_completion` callback.
 
@@ -236,6 +236,10 @@ class SensitiveDataWorker
 
   on_completion(encrypted_args: :response) do |response, record_id|
     SensitiveRecord.find(record_id).update!(data: response.body)
+  end
+
+  on_error do |error, record_id|
+    Rails.logger.error("Failed to fetch sensitive data for record #{record_id}: #{error.message}")
   end
 
   def perform(record_id)

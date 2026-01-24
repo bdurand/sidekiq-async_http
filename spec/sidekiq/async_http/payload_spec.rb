@@ -30,7 +30,7 @@ RSpec.describe Sidekiq::AsyncHttp::Payload do
         value = "binary data"
         encoding, encoded = described_class.encode(value, mimetype)
         expect(encoding).to eq(:binary)
-        expect(encoded).to eq(Base64.encode64(value).chomp)
+        expect(encoded).to eq([value].pack("m0"))
       end
     end
 
@@ -53,21 +53,21 @@ RSpec.describe Sidekiq::AsyncHttp::Payload do
 
     it "decodes :binary" do
       value = "binary data"
-      encoded = Base64.encode64(value).chomp
+      encoded = [value].pack("m0")
       expect(described_class.decode(encoded, :binary)).to eq(value)
     end
 
     it "decodes :gzipped" do
       value = "compressible text " * 100
       gzipped = Zlib::Deflate.deflate(value)
-      encoded = Base64.encode64(gzipped).chomp
+      encoded = [gzipped].pack("m0")
       expect(described_class.decode(encoded, :gzipped)).to eq(value)
     end
   end
 
   describe "#value" do
     it "decodes the encoded value" do
-      encoded = Base64.encode64("test").chomp
+      encoded = ["test"].pack("m0")
       payload = described_class.new(:binary, encoded)
       expect(payload.value).to eq("test")
     end

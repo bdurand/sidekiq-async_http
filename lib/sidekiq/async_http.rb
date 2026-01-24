@@ -6,6 +6,7 @@ require "async/http"
 require "concurrent-ruby"
 require "json"
 require "uri"
+require "zlib"
 
 # Main module for the Sidekiq Async HTTP gem.
 #

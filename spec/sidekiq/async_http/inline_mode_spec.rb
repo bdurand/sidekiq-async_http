@@ -47,7 +47,8 @@ RSpec.describe "Sidekiq::Testing.inline! mode" do
       # Execute request
       request.execute(
         sidekiq_job: {"class" => "TestWorkers::Worker", "jid" => "test-123", "args" => ["arg1", "arg2"]},
-        completion_worker: TestWorkers::CompletionWorker
+        completion_worker: TestWorkers::CompletionWorker,
+        error_worker: TestWorkers::ErrorWorker
       )
 
       # Verify completion worker was called inline (not enqueued)
@@ -74,7 +75,8 @@ RSpec.describe "Sidekiq::Testing.inline! mode" do
 
       request.execute(
         sidekiq_job: {"class" => "TestWorkers::Worker", "jid" => "test-456", "args" => ["create"]},
-        completion_worker: TestWorkers::CompletionWorker
+        completion_worker: TestWorkers::CompletionWorker,
+        error_worker: TestWorkers::ErrorWorker
       )
 
       expect(TestWorkers::CompletionWorker.calls.size).to eq(1)
@@ -155,25 +157,6 @@ RSpec.describe "Sidekiq::Testing.inline! mode" do
       expect(arg).to eq("slow")
     end
   end
-
-  describe "failed HTTP request without error worker" do
-    it "raises an error when no error worker is provided" do
-      # Stub connection error
-      stub_request(:get, "https://api.example.com/users").to_raise(Errno::ECONNREFUSED)
-
-      client = Sidekiq::AsyncHttp::Client.new(base_url: "https://api.example.com")
-      request = client.async_get("/users")
-
-      expect do
-        request.execute(
-          sidekiq_job: {"class" => "TestWorkers::Worker", "jid" => "test-no-error-worker", "args" => ["arg1"]},
-          completion_worker: TestWorkers::CompletionWorker
-          # Note: no error_worker provided
-        )
-      end.to raise_error(Errno::ECONNREFUSED)
-    end
-  end
-
   describe "with custom headers" do
     it "includes custom headers in the inline request" do
       stub_request(:get, "https://api.example.com/secure")
@@ -185,7 +168,8 @@ RSpec.describe "Sidekiq::Testing.inline! mode" do
 
       request.execute(
         sidekiq_job: {"class" => "TestWorkers::Worker", "jid" => "test-headers", "args" => []},
-        completion_worker: TestWorkers::CompletionWorker
+        completion_worker: TestWorkers::CompletionWorker,
+        error_worker: TestWorkers::ErrorWorker
       )
 
       expect(TestWorkers::CompletionWorker.calls.size).to eq(1)
