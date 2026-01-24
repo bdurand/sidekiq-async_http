@@ -172,60 +172,6 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
     end
   end
 
-  describe "#retry_job" do
-    it "increments retry count and re-enqueues" do
-      task = described_class.new(
-        request: request,
-        sidekiq_job: sidekiq_job,
-        completion_worker: completion_worker
-      )
-
-      expect(Sidekiq::Client).to receive(:push) do |job|
-        expect(job["retry_count"]).to eq(1)
-        expect(job["class"]).to eq("TestWorkers::Worker")
-        expect(job["args"]).to eq([1, 2, 3])
-        "new-jid"
-      end
-
-      result = task.retry_job
-      expect(result).to eq("new-jid")
-    end
-
-    it "increments existing retry count" do
-      job_with_retry = sidekiq_job.merge("retry_count" => 3)
-      task = described_class.new(
-        request: request,
-        sidekiq_job: job_with_retry,
-        completion_worker: completion_worker
-      )
-
-      expect(Sidekiq::Client).to receive(:push) do |job|
-        expect(job["retry_count"]).to eq(4)
-        "new-jid"
-      end
-
-      task.retry_job
-    end
-
-    it "starts retry count at 1 when not present" do
-      job_without_retry = sidekiq_job.dup
-      job_without_retry.delete("retry_count")
-
-      task = described_class.new(
-        request: request,
-        sidekiq_job: job_without_retry,
-        completion_worker: completion_worker
-      )
-
-      expect(Sidekiq::Client).to receive(:push) do |job|
-        expect(job["retry_count"]).to eq(1)
-        "new-jid"
-      end
-
-      task.retry_job
-    end
-  end
-
   describe "#success!" do
     it "enqueues the success worker" do
       task = described_class.new(
@@ -241,8 +187,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
         request_id: task.id,
         duration: 0.5,
         url: "https://api.example.com/users",
-        http_method: :get,
-        protocol: "HTTP/1.1"
+        http_method: :get
       )
 
       task.success!(response)
@@ -273,26 +218,6 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       expect(TestWorkers::ErrorWorker.jobs.size).to eq(1)
       job = TestWorkers::ErrorWorker.jobs.first
       expect(job["args"]).to eq([error.as_json, 1, 2, 3])
-    end
-
-    it "retries the job when error worker is not set" do
-      task = described_class.new(
-        request: request,
-        sidekiq_job: sidekiq_job,
-        completion_worker: "TestWorkers::CompletionWorker"
-      )
-      task.completed!
-
-      exception = StandardError.new("Something went wrong")
-
-      expect(Sidekiq::Client).to receive(:push) do |job|
-        expect(job["retry_count"]).to eq(1)
-        expect(job["class"]).to eq("TestWorkers::Worker")
-        expect(job["args"]).to eq([1, 2, 3])
-        "new-jid"
-      end
-
-      task.error!(exception)
     end
   end
 end

@@ -137,24 +137,13 @@ RSpec.describe Sidekiq::AsyncHttp::Request do
 
         request.execute(
           sidekiq_job: job_hash,
-          completion_worker: TestWorkers::CompletionWorker
+          completion_worker: TestWorkers::CompletionWorker,
+          error_worker: TestWorkers::ErrorWorker
         )
 
         expect(captured_task).not_to be_nil
         expect(captured_task.enqueued_at).to be_a(Time)
         expect(captured_task.enqueued_at).to be <= Time.now
-      end
-
-      it "works with nil error_worker" do
-        expect(processor).to receive(:enqueue) do |task|
-          expect(task.error_worker).to be_nil
-        end
-
-        request.execute(
-          sidekiq_job: job_hash,
-          completion_worker: TestWorkers::CompletionWorker,
-          error_worker: nil
-        )
       end
     end
 
@@ -167,7 +156,8 @@ RSpec.describe Sidekiq::AsyncHttp::Request do
         expect do
           request.execute(
             sidekiq_job: job_hash,
-            completion_worker: TestWorkers::CompletionWorker
+            completion_worker: TestWorkers::CompletionWorker,
+            error_worker: TestWorkers::ErrorWorker
           )
         end.to raise_error(Sidekiq::AsyncHttp::NotRunningError, /processor is not running/)
       end
@@ -178,7 +168,8 @@ RSpec.describe Sidekiq::AsyncHttp::Request do
         begin
           request.execute(
             sidekiq_job: job_hash,
-            completion_worker: TestWorkers::CompletionWorker
+            completion_worker: TestWorkers::CompletionWorker,
+            error_worker: TestWorkers::ErrorWorker
           )
         rescue Sidekiq::AsyncHttp::NotRunningError
           # Expected
@@ -191,33 +182,35 @@ RSpec.describe Sidekiq::AsyncHttp::Request do
         allow(processor).to receive(:running?).and_return(true)
       end
 
-      it "validates completion_worker is required" do
-        expect do
-          request.execute(sidekiq_job: job_hash, completion_worker: nil)
-        end.to raise_error(ArgumentError, "completion_worker is required")
-      end
-
       it "validates completion_worker is a class that includes Sidekiq::Job" do
         expect do
-          request.execute(sidekiq_job: job_hash, completion_worker: String)
+          request.execute(sidekiq_job: job_hash, completion_worker: String, error_worker: TestWorkers::ErrorWorker)
         end.to raise_error(ArgumentError, "completion_worker must be a class that includes Sidekiq::Job")
       end
 
       it "validates sidekiq_job is a Hash" do
         expect do
-          request.execute(sidekiq_job: "not a hash", completion_worker: TestWorkers::CompletionWorker)
+          request.execute(sidekiq_job: "not a hash", completion_worker: TestWorkers::CompletionWorker, error_worker: TestWorkers::ErrorWorker)
         end.to raise_error(ArgumentError, "sidekiq_job must be a Hash, got: String")
       end
 
       it "validates sidekiq_job has 'class' key" do
         expect do
-          request.execute(sidekiq_job: {"args" => []}, completion_worker: TestWorkers::CompletionWorker)
+          request.execute(
+            sidekiq_job: {"args" => []},
+            completion_worker: TestWorkers::CompletionWorker,
+            error_worker: TestWorkers::ErrorWorker
+          )
         end.to raise_error(ArgumentError, "sidekiq_job must have 'class' key")
       end
 
       it "validates sidekiq_job has 'args' array" do
         expect do
-          request.execute(sidekiq_job: {"class" => "Worker"}, completion_worker: TestWorkers::CompletionWorker)
+          request.execute(
+            sidekiq_job: {"class" => "Worker"},
+            completion_worker: TestWorkers::CompletionWorker,
+            error_worker: TestWorkers::ErrorWorker
+          )
         end.to raise_error(ArgumentError, "sidekiq_job must have 'args' array")
       end
     end

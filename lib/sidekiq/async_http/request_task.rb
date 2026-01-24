@@ -123,13 +123,6 @@ module Sidekiq::AsyncHttp
       Sidekiq::Client.push(@sidekiq_job)
     end
 
-    # Retry the original Sidekiq job with incremented retry count
-    # @return [String] job ID
-    def retry_job
-      @sidekiq_job["retry_count"] = (@sidekiq_job["retry_count"] || 0) + 1
-      Sidekiq::Client.push(@sidekiq_job)
-    end
-
     # Called with the HTTP response on a completed request. Note that
     # the response may represent an HTTP error (4xx or 5xx status).
     #
@@ -155,17 +148,9 @@ module Sidekiq::AsyncHttp
 
       @error = exception
 
-      if @error_worker
-        error = Error.from_exception(exception, request_id: @id, duration: duration, url: request.url, http_method: request.http_method)
-        worker_class = ClassHelper.resolve_class_name(@error_worker)
-        worker_class.set(async_http_continuation: "error").perform_async(error.as_json, *job_args)
-      else
-        # Re-enqueue the original job only if it's not already a continuation
-        # This prevents infinite loops in inline mode
-        unless @sidekiq_job["async_http_continuation"]
-          retry_job
-        end
-      end
+      error = Error.from_exception(exception, request_id: @id, duration: duration, url: request.url, http_method: request.http_method)
+      worker_class = ClassHelper.resolve_class_name(@error_worker)
+      worker_class.set(async_http_continuation: "error").perform_async(error.as_json, *job_args)
     end
 
     # Return true if the task successfully received a response from the server.
@@ -181,6 +166,25 @@ module Sidekiq::AsyncHttp
     # @return [Boolean]
     def error?
       !@error.nil?
+    end
+
+    # Build a Response object from async response data.
+    #
+    # @param status [Integer] HTTP status code
+    # @param headers [Hash] HTTP response headers
+    # @param body [String, nil] HTTP response body
+    # @return [Response] the response object
+    # @api private
+    def build_response(status:, headers:, body:)
+      Response.new(
+        status: status,
+        headers: headers,
+        body: body,
+        duration: duration,
+        request_id: id,
+        url: request.url,
+        http_method: request.http_method
+      )
     end
   end
 end

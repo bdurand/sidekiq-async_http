@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require "base64"
-require "zlib"
-
 module Sidekiq::AsyncHttp
   # Handles encoding and decoding of HTTP response bodies for storage.
   #
@@ -43,13 +40,13 @@ module Sidekiq::AsyncHttp
           else
             gzipped = Zlib::Deflate.deflate(value)
             if gzipped.bytesize < value.bytesize
-              [:gzipped, Base64.encode64(gzipped).chomp]
+              [:gzipped, [gzipped].pack("m0")]
             else
               [:text, value]
             end
           end
         else
-          [:binary, Base64.encode64(value).chomp]
+          [:binary, [value].pack("m0")]
         end
       end
 
@@ -65,9 +62,9 @@ module Sidekiq::AsyncHttp
         when :text
           encoded_value
         when :binary
-          Base64.decode64(encoded_value)
+          encoded_value.unpack1("m")
         when :gzipped
-          Zlib::Inflate.inflate(Base64.decode64(encoded_value))
+          Zlib::Inflate.inflate(encoded_value.unpack1("m"))
         end
       end
 

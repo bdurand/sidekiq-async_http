@@ -222,21 +222,6 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
         expect(task.completion_worker).to eq(TestWorkers::CompletionWorker)
         expect(task.error_worker).to eq(TestWorkers::ErrorWorker)
       end
-
-      it "does not pass an error worker to the request task if not defined" do
-        worker_class_without_error_callback = Class.new do
-          include Sidekiq::AsyncHttp::Job
-
-          on_completion do |response, *args|
-            # no-op
-          end
-        end
-
-        worker_class_without_error_callback.new.async_request(:put, "https://api.example.com/data/1", timeout: 30)
-        task = request_tasks.first
-        expect(task.error_worker).to be_nil
-        expect(task.completion_worker).to eq(worker_class_without_error_callback::CompletionCallback)
-      end
     end
 
     describe "#async_get" do

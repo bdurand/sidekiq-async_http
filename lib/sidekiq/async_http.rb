@@ -6,6 +6,7 @@ require "async/http"
 require "concurrent-ruby"
 require "json"
 require "uri"
+require "zlib"
 
 # Main module for the Sidekiq Async HTTP gem.
 #
@@ -64,6 +65,7 @@ module Sidekiq::AsyncHttp
   autoload :Context, File.join(__dir__, "async_http/context")
   autoload :ContinuationMiddleware, File.join(__dir__, "async_http/continuation_middleware")
   autoload :Error, File.join(__dir__, "async_http/error")
+  autoload :HttpClientFactory, File.join(__dir__, "async_http/http_client_factory")
   autoload :HttpHeaders, File.join(__dir__, "async_http/http_headers")
   autoload :InflightRegistry, File.join(__dir__, "async_http/inflight_registry")
   autoload :InlineRequest, File.join(__dir__, "async_http/inline_request")
@@ -71,10 +73,13 @@ module Sidekiq::AsyncHttp
   autoload :Metrics, File.join(__dir__, "async_http/metrics")
   autoload :MonitorThread, File.join(__dir__, "async_http/monitor_thread")
   autoload :Payload, File.join(__dir__, "async_http/payload")
+  autoload :LifecycleManager, File.join(__dir__, "async_http/lifecycle_manager")
   autoload :Processor, File.join(__dir__, "async_http/processor")
   autoload :Request, File.join(__dir__, "async_http/request")
+  autoload :RequestBuilder, File.join(__dir__, "async_http/request_builder")
   autoload :RequestTask, File.join(__dir__, "async_http/request_task")
   autoload :Response, File.join(__dir__, "async_http/response")
+  autoload :ResponseReader, File.join(__dir__, "async_http/response_reader")
   autoload :SidekiqLifecycleHooks, File.join(__dir__, "async_http/sidekiq_lifecycle_hooks")
   autoload :Stats, File.join(__dir__, "async_http/stats")
 

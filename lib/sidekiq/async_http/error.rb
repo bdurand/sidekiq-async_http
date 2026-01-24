@@ -52,7 +52,26 @@ module Sidekiq
         # @param http_method [Symbol, String] the HTTP method
         # @return [Error] the error object
         def from_exception(exception, duration:, request_id:, url:, http_method:)
-          error_type = case exception
+          type = error_type(exception)
+
+          new(
+            class_name: exception.class.name,
+            message: exception.message,
+            backtrace: exception.backtrace || [],
+            request_id: request_id,
+            error_type: type,
+            duration: duration,
+            url: url,
+            http_method: http_method
+          )
+        end
+
+        # Determine error type from exception.
+        #
+        # @param exception [Exception] the exception to categorize
+        # @return [Symbol] the error type
+        def error_type(exception)
+          case exception
           in Async::TimeoutError
             :timeout
           in OpenSSL::SSL::SSLError
@@ -67,17 +86,6 @@ module Sidekiq
               :unknown
             end
           end
-
-          new(
-            class_name: exception.class.name,
-            message: exception.message,
-            backtrace: exception.backtrace || [],
-            request_id: request_id,
-            error_type: error_type,
-            duration: duration,
-            url: url,
-            http_method: http_method
-          )
         end
       end
 

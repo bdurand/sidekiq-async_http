@@ -7,7 +7,7 @@ class ExampleWorker
   sidekiq_options retry: 1
 
   class CompletionWorker
-    include Sidekiq::Worker
+    include Sidekiq::Job
 
     sidekiq_options encrypted_args: :response_hash
 
@@ -60,7 +60,19 @@ class ExampleWorker
     end
   end
 
+  class ErrorWorker
+    include Sidekiq::Job
+
+    sidekiq_options encrypted_args: :error_hash
+
+    def perform(error_hash, method, url)
+      error = Sidekiq::AsyncHttp::Error.load(error_hash)
+      Sidekiq.logger.error("ExampleWorker: Request to #{url} failed with error: #{error.error_class.name} #{error.message}")
+    end
+  end
+
   self.completion_callback_worker = CompletionWorker
+  self.error_callback_worker = ErrorWorker
 
   def perform(method, url)
     async_request(method, url)

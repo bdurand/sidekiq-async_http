@@ -61,11 +61,10 @@ module Sidekiq::AsyncHttp
     #   to the Sidekiq server middleware chain. This is done by default if you require
     #   the "sidekiq/async_http/sidekiq" file.
     # @param completion_worker [Class] Worker class (must include Sidekiq::Job) to call on successful response
-    # @param error_worker [Class, nil] Worker class (must include Sidekiq::Job) to call on error.
-    #   If nil, errors will be logged and the original job will be retried.
+    # @param error_worker [Class] Worker class (must include Sidekiq::Job) to call on error.
     # @param synchronous [Boolean] If true, runs the request inline (for testing).
     # @return [String] the request ID
-    def execute(completion_worker:, sidekiq_job: nil, error_worker: nil, synchronous: false)
+    def execute(completion_worker:, error_worker:, sidekiq_job: nil, synchronous: false)
       # Get current job if not provided
       sidekiq_job ||= (defined?(Sidekiq::AsyncHttp::Context) ? Sidekiq::AsyncHttp::Context.current_job : nil)
 
@@ -86,17 +85,11 @@ module Sidekiq::AsyncHttp
         raise ArgumentError, "sidekiq_job must have 'args' array"
       end
 
-      # Validate completion_worker
-      if completion_worker.nil?
-        raise ArgumentError, "completion_worker is required"
-      end
-
       unless completion_worker.is_a?(Class) && completion_worker.include?(Sidekiq::Job)
         raise ArgumentError, "completion_worker must be a class that includes Sidekiq::Job"
       end
 
-      # Validate error_worker if provided
-      if error_worker && !(error_worker.is_a?(Class) && error_worker.include?(Sidekiq::Job))
+      unless error_worker.is_a?(Class) && error_worker.include?(Sidekiq::Job)
         raise ArgumentError, "error_worker must be a class that includes Sidekiq::Job"
       end
 
