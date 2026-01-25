@@ -115,6 +115,7 @@ erDiagram
     JOB-MIXIN {
         class completion_worker
         class error_worker
+        array callback_args
     }
 
     INFLIGHT-REGISTRY {

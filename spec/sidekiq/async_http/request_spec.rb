@@ -145,6 +145,76 @@ RSpec.describe Sidekiq::AsyncHttp::Request do
         expect(captured_task.enqueued_at).to be_a(Time)
         expect(captured_task.enqueued_at).to be <= Time.now
       end
+
+      context "with callback_args" do
+        it "passes callback_args to the RequestTask" do
+          captured_task = nil
+          allow(processor).to receive(:enqueue) { |task| captured_task = task }
+
+          request.execute(
+            sidekiq_job: job_hash,
+            completion_worker: TestWorkers::CompletionWorker,
+            error_worker: TestWorkers::ErrorWorker,
+            callback_args: %w[custom args]
+          )
+
+          expect(captured_task.callback_args).to eq(%w[custom args])
+        end
+
+        it "wraps a single value in an array" do
+          captured_task = nil
+          allow(processor).to receive(:enqueue) { |task| captured_task = task }
+
+          request.execute(
+            sidekiq_job: job_hash,
+            completion_worker: TestWorkers::CompletionWorker,
+            error_worker: TestWorkers::ErrorWorker,
+            callback_args: "single_value"
+          )
+
+          expect(captured_task.callback_args).to eq(["single_value"])
+        end
+
+        it "leaves callback_args nil when not provided" do
+          captured_task = nil
+          allow(processor).to receive(:enqueue) { |task| captured_task = task }
+
+          request.execute(
+            sidekiq_job: job_hash,
+            completion_worker: TestWorkers::CompletionWorker,
+            error_worker: TestWorkers::ErrorWorker
+          )
+
+          expect(captured_task.callback_args).to be_nil
+        end
+
+        it "uses callback_args in job_args when provided" do
+          captured_task = nil
+          allow(processor).to receive(:enqueue) { |task| captured_task = task }
+
+          request.execute(
+            sidekiq_job: job_hash,
+            completion_worker: TestWorkers::CompletionWorker,
+            error_worker: TestWorkers::ErrorWorker,
+            callback_args: %w[custom args]
+          )
+
+          expect(captured_task.job_args).to eq(%w[custom args])
+        end
+
+        it "uses original job args when callback_args is nil" do
+          captured_task = nil
+          allow(processor).to receive(:enqueue) { |task| captured_task = task }
+
+          request.execute(
+            sidekiq_job: job_hash,
+            completion_worker: TestWorkers::CompletionWorker,
+            error_worker: TestWorkers::ErrorWorker
+          )
+
+          expect(captured_task.job_args).to eq([1, 2, 3])
+        end
+      end
     end
 
     context "when processor is not running" do

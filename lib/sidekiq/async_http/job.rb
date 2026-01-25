@@ -31,8 +31,8 @@ module Sidekiq::AsyncHttp
       #
       # @param base [Class] the class including this module
       def included(base)
-        unless defined?(ActiveJob::Base) && base < ActiveJob::Base
-          base.include(Sidekiq::Job) unless base.include?(Sidekiq::Job)
+        if !(defined?(ActiveJob::Base) && base < ActiveJob::Base) && !base.include?(Sidekiq::Job)
+          base.include(Sidekiq::Job)
         end
 
         base.extend(ClassMethods)
@@ -158,23 +158,33 @@ module Sidekiq::AsyncHttp
     # @param method [Symbol] HTTP method (:get, :post, :put, :patch, :delete)
     # @param url [String] the request URL
     # @param options [Hash] additional request options
+    # @option options [Class] :completion_worker Worker class to call on successful response
+    # @option options [Class] :error_worker Worker class to call on error
+    # @option options [Array, Object] :callback_args Custom arguments to pass to callback workers
+    #   instead of the original job args. If provided, will be wrapped in an array using Array().
     # @return [String] request ID
     def async_request(method, url, **options)
       options = options.dup
-      completion_worker ||= options.delete(:completion_worker)
-      error_worker ||= options.delete(:error_worker)
+      completion_worker = options.delete(:completion_worker)
+      error_worker = options.delete(:error_worker)
+      callback_args = options.delete(:callback_args)
 
       completion_worker ||= self.class.completion_callback_worker
       error_worker ||= self.class.error_callback_worker
 
       request = async_http_client.async_request(method, url, **options)
-      request.execute(completion_worker: completion_worker, error_worker: error_worker)
+      request.execute(
+        completion_worker: completion_worker,
+        error_worker: error_worker,
+        callback_args: callback_args
+      )
     end
 
     # Convenience method for GET requests.
     #
     # @param url [String] the request URL
-    # @param options [Hash] additional request options
+    # @param options [Hash] additional request options (see {#async_request})
+    #
     # @return [String] request ID
     def async_get(url, **options)
       async_request(:get, url, **options)
@@ -183,7 +193,8 @@ module Sidekiq::AsyncHttp
     # Convenience method for POST requests.
     #
     # @param url [String] the request URL
-    # @param options [Hash] additional request options
+    # @param options [Hash] additional request options (see {#async_request})
+    #
     # @return [String] request ID
     def async_post(url, **options)
       async_request(:post, url, **options)
@@ -192,7 +203,8 @@ module Sidekiq::AsyncHttp
     # Convenience method for PUT requests.
     #
     # @param url [String] the request URL
-    # @param options [Hash] additional request options
+    # @param options [Hash] additional request options (see {#async_request})
+    #
     # @return [String] request ID
     def async_put(url, **options)
       async_request(:put, url, **options)
@@ -201,7 +213,8 @@ module Sidekiq::AsyncHttp
     # Convenience method for PATCH requests.
     #
     # @param url [String] the request URL
-    # @param options [Hash] additional request options
+    # @param options [Hash] additional request options (see {#async_request})
+    #
     # @return [String] request ID
     def async_patch(url, **options)
       async_request(:patch, url, **options)
@@ -210,7 +223,8 @@ module Sidekiq::AsyncHttp
     # Convenience method for DELETE requests.
     #
     # @param url [String] the request URL
-    # @param options [Hash] additional request options
+    # @param options [Hash] additional request options (see {#async_request})
+    #
     # @return [String] request ID
     def async_delete(url, **options)
       async_request(:delete, url, **options)

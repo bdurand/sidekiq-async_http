@@ -63,26 +63,30 @@ module Sidekiq::AsyncHttp
     # @param completion_worker [Class] Worker class (must include Sidekiq::Job) to call on successful response
     # @param error_worker [Class] Worker class (must include Sidekiq::Job) to call on error.
     # @param synchronous [Boolean] If true, runs the request inline (for testing).
+    # @param callback_args [Array, Object, nil] Custom arguments to pass to callback workers
+    #   instead of the original Sidekiq job args. If provided, will be wrapped in an array
+    #   using Array(). If nil, the original job args are used.
+    #
     # @return [String] the request ID
-    def execute(completion_worker:, error_worker:, sidekiq_job: nil, synchronous: false)
+    def execute(completion_worker:, error_worker:, sidekiq_job: nil, synchronous: false, callback_args: nil)
       # Get current job if not provided
       sidekiq_job ||= (defined?(Sidekiq::AsyncHttp::Context) ? Sidekiq::AsyncHttp::Context.current_job : nil)
 
       # Validate sidekiq_job
       if sidekiq_job.nil?
-        raise ArgumentError, "sidekiq_job is required (provide hash or ensure Sidekiq::AsyncHttp::Context.current_job is set)"
+        raise ArgumentError.new("sidekiq_job is required (provide hash or ensure Sidekiq::AsyncHttp::Context.current_job is set)")
       end
 
       unless sidekiq_job.is_a?(Hash)
-        raise ArgumentError, "sidekiq_job must be a Hash, got: #{sidekiq_job.class}"
+        raise ArgumentError.new("sidekiq_job must be a Hash, got: #{sidekiq_job.class}")
       end
 
       unless sidekiq_job.key?("class")
-        raise ArgumentError, "sidekiq_job must have 'class' key"
+        raise ArgumentError.new("sidekiq_job must have 'class' key")
       end
 
       unless sidekiq_job["args"].is_a?(Array)
-        raise ArgumentError, "sidekiq_job must have 'args' array"
+        raise ArgumentError.new("sidekiq_job must have 'args' array")
       end
 
       unless completion_worker.is_a?(Class) && completion_worker.include?(Sidekiq::Job)
@@ -97,7 +101,8 @@ module Sidekiq::AsyncHttp
         request: self,
         sidekiq_job: sidekiq_job,
         completion_worker: completion_worker,
-        error_worker: error_worker
+        error_worker: error_worker,
+        callback_args: callback_args
       )
 
       # Run the request inline if Sidekiq::Testing.inline! is enabled
@@ -128,7 +133,7 @@ module Sidekiq::AsyncHttp
       end
 
       if @url.nil? || (@url.is_a?(String) && @url.empty?)
-        raise ArgumentError, "url is required"
+        raise ArgumentError.new("url is required")
       end
 
       unless @url.is_a?(String) || @url.is_a?(URI::Generic)
@@ -136,7 +141,7 @@ module Sidekiq::AsyncHttp
       end
 
       if [:get, :delete].include?(@http_method) && !@body.nil?
-        raise ArgumentError, "body is not allowed for #{@http_method.upcase} requests"
+        raise ArgumentError.new("body is not allowed for #{@http_method.upcase} requests")
       end
 
       self

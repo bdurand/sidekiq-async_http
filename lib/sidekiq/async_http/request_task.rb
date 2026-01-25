@@ -22,6 +22,9 @@ module Sidekiq::AsyncHttp
     # @return [String, nil] Class name for the error callback worker, optional
     attr_reader :error_worker
 
+    # @return [Array, nil] Custom arguments to pass to callback workers (overrides job args)
+    attr_reader :callback_args
+
     # @return [Response, nil] The HTTP response, set on success
     attr_reader :response, :error
 
@@ -31,12 +34,15 @@ module Sidekiq::AsyncHttp
     # @param sidekiq_job [Hash] The Sidekiq job hash.
     # @param completion_worker [String] Class name for success callback.
     # @param error_worker [String, nil] Class name for error callback, optional.
-    def initialize(request:, sidekiq_job:, completion_worker:, error_worker: nil)
+    # @param callback_args [Array, Object, nil] Custom arguments for callback workers.
+    #   If provided, will be wrapped in an array using Array(). If nil, job args are used.
+    def initialize(request:, sidekiq_job:, completion_worker:, error_worker: nil, callback_args: nil)
       @id = SecureRandom.uuid
       @request = request
       @sidekiq_job = sidekiq_job
       @completion_worker = completion_worker
       @error_worker = error_worker
+      @callback_args = callback_args ? Array(callback_args) : nil
       @enqueued_at = nil
       @started_at = nil
       @completed_at = nil
@@ -111,10 +117,12 @@ module Sidekiq::AsyncHttp
       @sidekiq_job["jid"]
     end
 
-    # Get the arguments from the Sidekiq job
-    # @return [Array] job arguments
+    # Get the arguments to pass to callback workers.
+    # Returns callback_args if set, otherwise falls back to the original Sidekiq job args.
+    #
+    # @return [Array] callback arguments
     def job_args
-      @sidekiq_job["args"]
+      @callback_args || @sidekiq_job["args"]
     end
 
     # Re-enqueue the original Sidekiq job
@@ -148,7 +156,8 @@ module Sidekiq::AsyncHttp
 
       @error = exception
 
-      error = Error.from_exception(exception, request_id: @id, duration: duration, url: request.url, http_method: request.http_method)
+      error = Error.from_exception(exception, request_id: @id, duration: duration, url: request.url,
+        http_method: request.http_method)
       worker_class = ClassHelper.resolve_class_name(@error_worker)
       worker_class.set(async_http_continuation: "error").perform_async(error.as_json, *job_args)
     end

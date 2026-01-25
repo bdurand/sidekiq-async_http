@@ -215,6 +215,53 @@ class FlexibleWorker
 end
 ```
 
+### Callback Arguments
+
+By default, callback workers receive the original Sidekiq job arguments along with the response or error. If you need to pass different arguments to your callbacks, you can use the `callback_args` option:
+
+```ruby
+class FetchUserDataWorker
+  include Sidekiq::AsyncHttp::Job
+
+  on_completion do |response, user_id, request_timestamp|
+    # Receives custom callback_args instead of original job args
+    User.find(user_id).update!(
+      external_data: response.json,
+      fetched_at: request_timestamp
+    )
+  end
+
+  on_error do |error, user_id, request_timestamp|
+    Rails.logger.error("Failed to fetch data for user #{user_id} at #{request_timestamp}: #{error.message}")
+  end
+
+  def perform(user_id, options = {})
+    # Original job has complex options hash, but callback only needs specific data
+    timestamp = Time.now.iso8601
+
+    async_get(
+      "https://api.example.com/users/#{user_id}",
+      callback_args: [user_id, timestamp]
+    )
+  end
+end
+```
+
+This is useful when:
+- Your original job arguments contain data not needed by the callback
+- You want to pass computed values from the original job to the callback
+- You need to simplify the callback signature
+
+The `callback_args` option accepts any value and wraps it in an array using `Array()`. You can also use it when calling `Request#execute` directly:
+
+```ruby
+request.execute(
+  completion_worker: MyCompletionWorker,
+  error_worker: MyErrorWorker,
+  callback_args: ["custom", "args"]
+)
+```
+
 ### Sensitive Data Handling
 
 Responses from asynchronous HTTP requests will be pushed to Redis in order to call the completion job. This can raise security concerns if the response contains sensitive data since the data will be stored in plain text.
