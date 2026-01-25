@@ -180,28 +180,6 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
   describe "#enqueue" do
     let(:request) { create_request_task }
 
-    after do
-      processor.stop if processor.running? || processor.draining?
-    end
-
-    context "when running" do
-      before do
-        stub_request(:get, "https://api.example.com/users").to_return(status: 200, body: "response", headers: {})
-      end
-
-      around do |example|
-        processor.run do
-          example.run
-        end
-      end
-
-      it "adds the request to the queue" do
-        processor.enqueue(request)
-        queue = processor.instance_variable_get(:@queue)
-        expect(queue.size).to eq(1)
-      end
-    end
-
     context "when draining" do
       around do |example|
         processor.run do

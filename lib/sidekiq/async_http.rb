@@ -81,6 +81,7 @@ module Sidekiq::AsyncHttp
   autoload :Response, File.join(__dir__, "async_http/response")
   autoload :ResponseReader, File.join(__dir__, "async_http/response_reader")
   autoload :SidekiqLifecycleHooks, File.join(__dir__, "async_http/sidekiq_lifecycle_hooks")
+  autoload :SerializeResponseMiddleware, File.join(__dir__, "async_http/serialize_response_middleware")
   autoload :Stats, File.join(__dir__, "async_http/stats")
 
   @processor = nil
@@ -138,7 +139,17 @@ module Sidekiq::AsyncHttp
     #
     # @return [void]
     def append_middleware
+      Sidekiq.configure_client do |config|
+        config.client_middleware do |chain|
+          chain.prepend Sidekiq::AsyncHttp::SerializeResponseMiddleware
+        end
+      end
+
       Sidekiq.configure_server do |config|
+        config.client_middleware do |chain|
+          chain.prepend Sidekiq::AsyncHttp::SerializeResponseMiddleware
+        end
+
         config.server_middleware do |chain|
           chain.add Sidekiq::AsyncHttp::Context::Middleware
           chain.add Sidekiq::AsyncHttp::ContinuationMiddleware
@@ -268,11 +279,10 @@ module Sidekiq::AsyncHttp
 
     # Invoke the registered completion callbacks
     #
-    # @param response_hash [Hash] the HTTP response
+    # @param response [Response] the HTTP response
     # @return [void]
     # @api private
-    def invoke_completion_callbacks(response_hash)
-      response = Response.load(response_hash)
+    def invoke_completion_callbacks(response)
       @after_completion_callbacks.each do |callback|
         callback.call(response)
       end
@@ -280,11 +290,10 @@ module Sidekiq::AsyncHttp
 
     # Invoke the registered error callbacks
     #
-    # @param error_hash [Hash] information about the error that was raised
+    # @param error [Error] information about the error that was raised
     # @return [void]
     # @api private
-    def invoke_error_callbacks(error_hash)
-      error = Error.load(error_hash)
+    def invoke_error_callbacks(error)
       @after_error_callbacks.each do |callback|
         callback.call(error)
       end

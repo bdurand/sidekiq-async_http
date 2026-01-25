@@ -153,7 +153,7 @@ end
 
 For more complex workflows callbacks, you can define dedicated Sidekiq workers for completion and error handling.
 
-The `perform` methods of these workers will receive the response or error object serialized as a hash as the first argument, followed by the original job arguments. You can call `Sidekiq::AsyncHttp::Response.load` or `Sidekiq::AsyncHttp::Error.load` to deserialize them back into objects.
+The `perform` methods of these workers will receive the response or error object sas the first argument, followed by the original job arguments. You can call `Sidekiq::AsyncHttp::Response.load` or `Sidekiq::AsyncHttp::Error.load` to deserialize them back into objects.
 
 ```ruby
 # Define dedicated callback workers
@@ -161,8 +161,7 @@ class FetchCompletionWorker
   include Sidekiq::Job
   sidekiq_options queue: "critical", retry: 10
 
-  def perform(response_data, user_id)
-    response = Sidekiq::AsyncHttp::Response.load(response_data)
+  def perform(response, user_id)
     User.find(user_id).update!(data: response.json)
   end
 end
@@ -171,8 +170,7 @@ class FetchErrorWorker
   include Sidekiq::Job
   sidekiq_options queue: "low"
 
-  def perform(error_data, user_id)
-    error = Sidekiq::AsyncHttp::Error.load(error_data)
+  def perform(error, user_id)
     ErrorTracker.record(error, user_id: user_id)
   end
 end

@@ -151,33 +151,4 @@ RSpec.describe "Error Handling Integration", :integration do
       expect(args).to eq(["unavailable"])
     end
   end
-
-  describe "error worker not provided" do
-    it "logs error and does not crash when error_worker is nil" do
-      # Make request to non-existent server without error_worker
-      client = Sidekiq::AsyncHttp::Client.new(base_url: "http://127.0.0.1:1", connect_timeout: 0.1)
-      request = client.async_get("/nowhere")
-
-      request_task = Sidekiq::AsyncHttp::RequestTask.new(
-        request: request,
-        sidekiq_job: {"class" => "TestWorkers::Worker", "jid" => "no-error-worker", "args" => ["test"]},
-        completion_worker: "TestWorkers::CompletionWorker"
-        # Note: no error_worker provided
-      )
-
-      processor.enqueue(request_task)
-      processor.wait_for_idle
-
-      # Process enqueued jobs
-      Sidekiq::Worker.drain_all
-
-      # Neither worker should be called (error was logged)
-      expect(TestWorkers::CompletionWorker.calls.size).to eq(0)
-      expect(TestWorkers::ErrorWorker.calls.size).to eq(0)
-
-      # Verify metrics recorded the error
-      expect(processor.metrics.error_count).to eq(1)
-      expect(processor.metrics.errors_by_type[:connection]).to eq(1)
-    end
-  end
 end

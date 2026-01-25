@@ -423,7 +423,7 @@ RSpec.describe Sidekiq::AsyncHttp do
           responses << response
         end
 
-        described_class.invoke_completion_callbacks(response_data)
+        described_class.invoke_completion_callbacks(Sidekiq::AsyncHttp::Response.load(response_data))
 
         expect(responses.size).to eq(2)
         expect(responses.first).to be_a(Sidekiq::AsyncHttp::Response)
@@ -440,7 +440,7 @@ RSpec.describe Sidekiq::AsyncHttp do
           response_received = response
         end
 
-        described_class.invoke_completion_callbacks(response_data)
+        described_class.invoke_completion_callbacks(Sidekiq::AsyncHttp::Response.load(response_data))
 
         expect(response_received).to be_a(Sidekiq::AsyncHttp::Response)
         expect(response_received.status).to eq(200)
@@ -492,7 +492,7 @@ RSpec.describe Sidekiq::AsyncHttp do
           errors << error
         end
 
-        described_class.invoke_error_callbacks(error_data)
+        described_class.invoke_error_callbacks(Sidekiq::AsyncHttp::Error.load(error_data))
 
         expect(errors.size).to eq(2)
         expect(errors.first).to be_a(Sidekiq::AsyncHttp::Error)
@@ -509,7 +509,7 @@ RSpec.describe Sidekiq::AsyncHttp do
           error_received = error
         end
 
-        described_class.invoke_error_callbacks(error_data)
+        described_class.invoke_error_callbacks(Sidekiq::AsyncHttp::Error.load(error_data))
 
         expect(error_received).to be_a(Sidekiq::AsyncHttp::Error)
         expect(error_received.error_class).to eq(Timeout::Error)
@@ -534,14 +534,14 @@ RSpec.describe Sidekiq::AsyncHttp do
           call_order << :third
         end
 
-        described_class.invoke_error_callbacks(error_data)
+        described_class.invoke_error_callbacks(Sidekiq::AsyncHttp::Error.load(error_data))
 
         expect(call_order).to eq([:first, :second, :third])
       end
 
       it "does nothing when no callbacks are registered" do
         expect do
-          described_class.invoke_error_callbacks(error_data)
+          described_class.invoke_error_callbacks(Sidekiq::AsyncHttp::Error.load(error_data))
         end.not_to raise_error
       end
     end

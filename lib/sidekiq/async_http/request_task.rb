@@ -36,13 +36,13 @@ module Sidekiq::AsyncHttp
     # @param error_worker [String, nil] Class name for error callback, optional.
     # @param callback_args [Array, Object, nil] Custom arguments for callback workers.
     #   If provided, will be wrapped in an array using Array(). If nil, job args are used.
-    def initialize(request:, sidekiq_job:, completion_worker:, error_worker: nil, callback_args: nil)
+    def initialize(request:, sidekiq_job:, completion_worker:, error_worker:, callback_args: nil)
       @id = SecureRandom.uuid
       @request = request
       @sidekiq_job = sidekiq_job
       @completion_worker = completion_worker
       @error_worker = error_worker
-      @callback_args = callback_args ? Array(callback_args) : nil
+      @callback_args = callback_args ? Array(callback_args) : sidekiq_job&.fetch("args", nil)
       @enqueued_at = nil
       @started_at = nil
       @completed_at = nil
@@ -117,14 +117,6 @@ module Sidekiq::AsyncHttp
       @sidekiq_job["jid"]
     end
 
-    # Get the arguments to pass to callback workers.
-    # Returns callback_args if set, otherwise falls back to the original Sidekiq job args.
-    #
-    # @return [Array] callback arguments
-    def job_args
-      @callback_args || @sidekiq_job["args"]
-    end
-
     # Re-enqueue the original Sidekiq job
     # @return [String] job ID
     def reenqueue_job
@@ -144,7 +136,7 @@ module Sidekiq::AsyncHttp
       worker_class = ClassHelper.resolve_class_name(@completion_worker)
       raise "Completion worker class not set" unless worker_class
 
-      worker_class.set(async_http_continuation: "completion").perform_async(response.as_json, *job_args)
+      worker_class.set(async_http_continuation: "completion").perform_async(response, *callback_args)
     end
 
     # Called with the HTTP error on a failed request.
@@ -159,7 +151,7 @@ module Sidekiq::AsyncHttp
       error = Error.from_exception(exception, request_id: @id, duration: duration, url: request.url,
         http_method: request.http_method)
       worker_class = ClassHelper.resolve_class_name(@error_worker)
-      worker_class.set(async_http_continuation: "error").perform_async(error.as_json, *job_args)
+      worker_class.set(async_http_continuation: "error").perform_async(error, *callback_args)
     end
 
     # Return true if the task successfully received a response from the server.

@@ -66,19 +66,13 @@ module Sidekiq::AsyncHttp
       # @yieldparam args [Array] additional arguments passed to the job
       def on_completion(options = {}, &block)
         on_completion_block = block
-        active_job = defined?(ActiveJob::Base) && self < ActiveJob::Base
 
         worker_class = Class.new do
           include Sidekiq::Job
 
           sidekiq_options(options) unless options.empty?
 
-          define_method(:perform) do |response_data, *args|
-            response = Sidekiq::AsyncHttp::Response.load(response_data)
-            if active_job
-              original_args = args.first
-              args = original_args.fetch("arguments", []) if original_args.is_a?(Hash)
-            end
+          define_method(:perform) do |response, *args|
             on_completion_block.call(response, *args)
           end
         end
@@ -107,19 +101,13 @@ module Sidekiq::AsyncHttp
       # @yieldparam args [Array] additional arguments passed to the job
       def on_error(options = {}, &block)
         error_callback_block = block
-        active_job = defined?(ActiveJob::Base) && self < ActiveJob::Base
 
         worker_class = Class.new do
           include Sidekiq::Job
 
           sidekiq_options(options) unless options.empty?
 
-          define_method(:perform) do |error_data, *args|
-            error = Sidekiq::AsyncHttp::Error.load(error_data)
-            if active_job
-              original_args = args.first
-              args = original_args.fetch("arguments", []) if original_args.is_a?(Hash)
-            end
+          define_method(:perform) do |error, *args|
             error_callback_block.call(error, *args)
           end
         end
@@ -171,6 +159,15 @@ module Sidekiq::AsyncHttp
 
       completion_worker ||= self.class.completion_callback_worker
       error_worker ||= self.class.error_callback_worker
+
+      if callback_args.nil?
+        job_args = Context.current_job&.fetch("args", nil)
+        callback_args = if job_args && defined?(ActiveJob::Base) && is_a?(ActiveJob::Base)
+          job_args.first&.fetch("arguments", nil)
+        else
+          job_args
+        end
+      end
 
       request = async_http_client.async_request(method, url, **options)
       request.execute(

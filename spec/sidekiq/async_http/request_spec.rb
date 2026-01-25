@@ -175,20 +175,7 @@ RSpec.describe Sidekiq::AsyncHttp::Request do
           expect(captured_task.callback_args).to eq(["single_value"])
         end
 
-        it "leaves callback_args nil when not provided" do
-          captured_task = nil
-          allow(processor).to receive(:enqueue) { |task| captured_task = task }
-
-          request.execute(
-            sidekiq_job: job_hash,
-            completion_worker: TestWorkers::CompletionWorker,
-            error_worker: TestWorkers::ErrorWorker
-          )
-
-          expect(captured_task.callback_args).to be_nil
-        end
-
-        it "uses callback_args in job_args when provided" do
+        it "uses callback_args when provided" do
           captured_task = nil
           allow(processor).to receive(:enqueue) { |task| captured_task = task }
 
@@ -199,7 +186,7 @@ RSpec.describe Sidekiq::AsyncHttp::Request do
             callback_args: %w[custom args]
           )
 
-          expect(captured_task.job_args).to eq(%w[custom args])
+          expect(captured_task.callback_args).to eq(%w[custom args])
         end
 
         it "uses original job args when callback_args is nil" do
@@ -212,7 +199,7 @@ RSpec.describe Sidekiq::AsyncHttp::Request do
             error_worker: TestWorkers::ErrorWorker
           )
 
-          expect(captured_task.job_args).to eq([1, 2, 3])
+          expect(captured_task.callback_args).to eq([1, 2, 3])
         end
       end
     end

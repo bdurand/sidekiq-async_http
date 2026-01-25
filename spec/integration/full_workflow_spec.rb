@@ -115,7 +115,8 @@ RSpec.describe "Full Workflow Integration", :integration do
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        completion_worker: "TestWorkers::CompletionWorker"
+        completion_worker: "TestWorkers::CompletionWorker",
+        error_worker: "TestWorkers::ErrorWorker"
       )
 
       # Enqueue and wait
@@ -153,7 +154,8 @@ RSpec.describe "Full Workflow Integration", :integration do
             "jid" => "jid-#{i}",
             "args" => [i]
           },
-          completion_worker: "TestWorkers::CompletionWorker"
+          completion_worker: "TestWorkers::CompletionWorker",
+          error_worker: "TestWorkers::ErrorWorker"
         )
         processor.enqueue(request_task)
       end
@@ -190,7 +192,8 @@ RSpec.describe "Full Workflow Integration", :integration do
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
         sidekiq_job: {"class" => "TestWorkers::Worker", "jid" => "jid", "args" => []},
-        completion_worker: "TestWorkers::CompletionWorker"
+        completion_worker: "TestWorkers::CompletionWorker",
+        error_worker: "TestWorkers::ErrorWorker"
       )
 
       processor.enqueue(request_task)
@@ -221,7 +224,8 @@ RSpec.describe "Full Workflow Integration", :integration do
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
         sidekiq_job: {"class" => "TestWorkers::Worker", "jid" => "jid", "args" => []},
-        completion_worker: "TestWorkers::CompletionWorker"
+        completion_worker: "TestWorkers::CompletionWorker",
+        error_worker: "TestWorkers::ErrorWorker"
       )
 
       processor.enqueue(request_task)
