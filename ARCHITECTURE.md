@@ -176,17 +176,18 @@ The processor uses Ruby's Fiber scheduler (`async` gem) for non-blocking I/O:
 The processor maintains state through its lifecycle:
 
 - **stopped**: Initial state, not processing requests
+- **starting**: Processor is initializing, reactor thread launching
 - **running**: Actively processing requests
 - **draining**: Not accepting new requests, completing in-flight
 - **stopping**: Shutting down, waiting for requests to finish
 
 ## Crash Recovery
 
-In-flight requests are persisted to Redis. If a Sidekiq process crashes:
+In-flight requests are persisted to Redis with heartbeat timestamps. If a Sidekiq process crashes:
 
-1. Inflight registry serializes pending requests
-2. On restart, processor re-enqueues them
-3. Requests continue from where they left off
+1. Inflight registry tracks all pending requests with timestamps
+2. Monitor threads in other running processors detect orphaned requests (no heartbeat update within threshold)
+3. Orphaned requests are automatically re-enqueued to Sidekiq
 4. Prevents lost work during deployments or crashes
 
 ## Configuration
