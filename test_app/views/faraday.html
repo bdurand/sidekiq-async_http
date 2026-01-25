@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Faraday Adapter Test - Sidekiq AsyncHttp</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="toast" class="toast"></div>
+
+  <div class="container">
+    <h1>Faraday Adapter Test</h1>
+
+    <form id="faraday-form">
+      <div class="form-group">
+        <label>Execution Context</label>
+        <div class="radio-options">
+          <div class="radio-group">
+            <input
+              type="radio"
+              id="from-sidekiq"
+              name="context"
+              value="sidekiq"
+              checked
+            >
+            <label for="from-sidekiq">From Sidekiq Job</label>
+          </div>
+          <div class="radio-group">
+            <input
+              type="radio"
+              id="outside-sidekiq"
+              name="context"
+              value="direct"
+            >
+            <label for="outside-sidekiq">Outside Sidekiq</label>
+          </div>
+        </div>
+        <div class="help-text">Choose where the Faraday request originates from</div>
+      </div>
+
+      <div class="form-group">
+        <label for="url">URL</label>
+        <input
+          type="text"
+          id="url"
+          name="url"
+          value="/test"
+          autocomplete="off"
+        >
+        <div class="help-text">Request URL path or full URL</div>
+      </div>
+
+      <div class="form-group">
+        <label for="method">HTTP Method</label>
+        <select
+          id="method"
+          name="method"
+          style="width: 100%; padding: 6px 8px; border: 2px solid #e0e0e0; border-radius: 5px; font-size: 14px; font-family: inherit; transition: all 0.3s ease;"
+        >
+          <option value="GET" selected>GET</option>
+          <option value="POST">POST</option>
+          <option value="PUT">PUT</option>
+          <option value="PATCH">PATCH</option>
+          <option value="DELETE">DELETE</option>
+          <option value="HEAD">HEAD</option>
+          <option value="OPTIONS">OPTIONS</option>
+        </select>
+        <div class="help-text">HTTP method for the request</div>
+      </div>
+
+      <div class="form-group">
+        <label for="timeout">Timeout (seconds)</label>
+        <input
+          type="number"
+          id="timeout"
+          name="timeout"
+          value="30"
+          min="1"
+          max="60"
+          step="1"
+          autocomplete="off"
+        >
+        <div class="help-text">Request timeout in seconds</div>
+      </div>
+
+      <button type="submit">Send Request</button>
+    </form>
+
+    <div class="response-section">
+      <div class="response-title">
+        <span>Response</span>
+        <span class="polling-indicator active" id="polling-status">Polling</span>
+      </div>
+      <div class="response-content waiting" id="response-content">Waiting for response...</div>
+    </div>
+
+    <div class="links">
+      <a href="/">Main Test App</a>
+      <a href="/sidekiq" target="_blank">Sidekiq Dashboard</a>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      // Toast notification
+      function showToast(message, isError) {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.style.background = isError ? '#ef4444' : '#10b981';
+        toast.classList.add('show');
+
+        setTimeout(() => {
+          toast.classList.remove('show');
+        }, 3000);
+      }
+
+      // Response display
+      const responseContent = document.getElementById('response-content');
+      const pollingStatus = document.getElementById('polling-status');
+
+      function clearResponse() {
+        responseContent.textContent = 'Waiting for response...';
+        responseContent.className = 'response-content waiting';
+      }
+
+      function displayResponse(data) {
+        if (data.response) {
+          const parsed = JSON.parse(data.response);
+          responseContent.textContent = JSON.stringify(parsed, null, 2);
+          if (parsed.type === 'error') {
+            responseContent.className = 'response-content error';
+          } else {
+            responseContent.className = 'response-content success';
+          }
+          stopPolling();
+          pollingStatus.textContent = 'Stopped';
+          pollingStatus.className = 'polling-indicator stopped';
+          return true; // Response received
+        }
+        return false; // Still waiting
+      }
+
+      // Form submission
+      const form = document.getElementById('faraday-form');
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(form);
+        const button = form.querySelector('button[type="submit"]');
+
+        button.disabled = true;
+        button.textContent = 'Sending...';
+        clearResponse();
+
+        fetch('/run_faraday', {
+          method: 'POST',
+          body: formData
+        })
+        .then(response => {
+          if (response.ok) {
+            const context = formData.get('context');
+            const contextLabel = context === 'sidekiq' ? 'from Sidekiq job' : 'outside Sidekiq';
+            showToast(`Request sent ${contextLabel}!`);
+          } else {
+            showToast('Failed to send request', true);
+          }
+        })
+        .catch(err => {
+          console.error('Error submitting form:', err);
+          showToast('Error submitting form', true);
+        })
+        .finally(() => {
+          button.disabled = false;
+          button.textContent = 'Send Request';
+
+          // Start polling after form submission completes
+          responseReceived = false;
+          noResponseCount = 0;
+          if (!isPolling) {
+            startPolling();
+          }
+        });
+      });
+
+      // Status polling
+      let noResponseCount = 0;
+      let responseReceived = false;
+      let pollInterval = null;
+      let isPolling = false;
+
+      function fetchStatus() {
+        fetch('/faraday_status')
+          .then(response => response.json())
+          .then(data => {
+            if (displayResponse(data)) {
+              responseReceived = true;
+              // Keep polling active for a bit after receiving response
+              // in case user wants to see updated responses
+            }
+
+            if (!data.response) {
+              noResponseCount++;
+            } else {
+              noResponseCount = 0;
+            }
+
+            // Stop polling after 60 seconds of no new response (120 polls at 500ms)
+            if (noResponseCount >= 120 && isPolling) {
+              stopPolling();
+              pollingStatus.textContent = 'Stopped';
+              pollingStatus.className = 'polling-indicator stopped';
+            }
+          })
+          .catch(err => console.error('Failed to fetch status:', err));
+      }
+
+      function startPolling() {
+        if (isPolling) return;
+
+        isPolling = true;
+        pollingStatus.textContent = 'Polling';
+        pollingStatus.className = 'polling-indicator active';
+        fetchStatus(); // Initial fetch
+        pollInterval = setInterval(fetchStatus, 500);
+      }
+
+      function stopPolling() {
+        if (pollInterval) {
+          clearInterval(pollInterval);
+          pollInterval = null;
+        }
+        isPolling = false;
+      }
+
+      // Stop polling when page is hidden/unloaded
+      document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+          stopPolling();
+        } else {
+          startPolling();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

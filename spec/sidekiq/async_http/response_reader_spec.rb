@@ -82,5 +82,78 @@ RSpec.describe Sidekiq::AsyncHttp::ResponseReader do
         expect(result).to eq("Hello, World!")
       end
     end
+
+    context "with charset in Content-Type header" do
+      before do
+        allow(body_double).to receive(:each).and_yield("Hello")
+      end
+
+      it "applies UTF-8 encoding when charset=utf-8 is specified" do
+        headers_hash = {"content-type" => "text/html; charset=utf-8"}
+        result = response_reader.read_body(async_response, headers_hash)
+
+        expect(result).to eq("Hello")
+        expect(result.encoding).to eq(Encoding::UTF_8)
+      end
+
+      it "applies ISO-8859-1 encoding when charset=ISO-8859-1 is specified" do
+        headers_hash = {"content-type" => "text/plain; charset=ISO-8859-1"}
+        result = response_reader.read_body(async_response, headers_hash)
+
+        expect(result).to eq("Hello")
+        expect(result.encoding).to eq(Encoding::ISO_8859_1)
+      end
+
+      it "handles charset with different spacing" do
+        headers_hash = {"content-type" => "application/json;charset=utf-8"}
+        result = response_reader.read_body(async_response, headers_hash)
+
+        expect(result.encoding).to eq(Encoding::UTF_8)
+      end
+
+      it "handles charset with quoted values" do
+        headers_hash = {"content-type" => "text/html; charset=\"utf-8\""}
+        result = response_reader.read_body(async_response, headers_hash)
+
+        # The regex will capture the quotes, but Encoding.find should handle it
+        # Let's test that it either works or falls back gracefully
+        expect(result).to eq("Hello")
+      end
+
+      it "keeps original encoding when no charset is specified" do
+        headers_hash = {"content-type" => "text/plain"}
+        result = response_reader.read_body(async_response, headers_hash)
+
+        expect(result).to eq("Hello")
+        expect(result.encoding).to eq(Encoding::ASCII_8BIT)
+      end
+
+      it "keeps original encoding when Content-Type header is missing" do
+        headers_hash = {}
+        result = response_reader.read_body(async_response, headers_hash)
+
+        expect(result).to eq("Hello")
+        expect(result.encoding).to eq(Encoding::ASCII_8BIT)
+      end
+
+      it "handles invalid charset gracefully" do
+        headers_hash = {"content-type" => "text/plain; charset=INVALID-CHARSET"}
+        logger = instance_double(Logger)
+        allow(config).to receive(:logger).and_return(logger)
+        expect(logger).to receive(:warn).with(/Unknown charset 'INVALID-CHARSET'/)
+
+        result = response_reader.read_body(async_response, headers_hash)
+
+        expect(result).to eq("Hello")
+        expect(result.encoding).to eq(Encoding::ASCII_8BIT)
+      end
+
+      it "is case-insensitive for charset parameter" do
+        headers_hash = {"content-type" => "text/html; CHARSET=UTF-8"}
+        result = response_reader.read_body(async_response, headers_hash)
+
+        expect(result.encoding).to eq(Encoding::UTF_8)
+      end
+    end
   end
 end

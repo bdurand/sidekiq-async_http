@@ -9,10 +9,10 @@ class ExampleWorker
   class CompletionWorker
     include Sidekiq::Job
 
-    sidekiq_options encrypted_args: :response_hash
+    sidekiq_options encrypted_args: :response
 
-    def perform(response_hash, method, url)
-      response = Sidekiq::AsyncHttp::Response.load(response_hash)
+    def perform(response, method, url)
+      response = Sidekiq::AsyncHttp::Response.load(response)
       path = write_response(response)
       Sidekiq.logger.info("ExampleWorker: Response written to #{path}")
     end

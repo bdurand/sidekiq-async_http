@@ -4,6 +4,7 @@ require "sidekiq"
 require "sidekiq/throttled"
 require "sidekiq/encrypted_args"
 require "active_job"
+require "faraday-sidekiq_async_http"
 require_relative "../lib/sidekiq-async_http"
 
 require_relative "app_config"

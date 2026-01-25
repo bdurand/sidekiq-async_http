@@ -2,6 +2,7 @@ source "https://rubygems.org"
 
 gemspec path: ".."
 
+gem "faraday-sidekiq_async_http", path: "../../faraday-sidekiq_async_http"
 gem "protocol-rack"
 gem "rack-session"
 gem "sidekiq-throttled"
