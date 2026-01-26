@@ -102,7 +102,7 @@ module Sidekiq::AsyncHttp
     def duration
       return nil unless @started_at
 
-      (@completed_at || monotonic_time) - @started_at
+      ((@completed_at || monotonic_time) - @started_at).round(9)
     end
 
     # Get the worker class name from the Sidekiq job

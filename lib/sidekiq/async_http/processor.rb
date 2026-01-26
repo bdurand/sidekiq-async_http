@@ -376,7 +376,7 @@ module Sidekiq
           # Execute with timeout
           response_data = Async::Task.current.with_timeout(task.request.timeout || @config.default_request_timeout) do
             async_response = client.call(http_request)
-            headers_hash = async_response.headers.to_h
+            headers_hash = async_response.headers.to_h.transform_values(&:to_s)
             body = @response_reader.read_body(async_response, headers_hash) unless stopping? || stopped?
 
             # Build response object

@@ -10,7 +10,7 @@ This project uses the standardrb style guide. Run `bundle exec standardrb --fix`
 
 Do not rewrite existing code just to satisfy style guidelines unless those are violations of the standardrb rules.
 
-Do not use suffixed conditionals with complex conditions with multiple logical operators. Use full `if`/`unless` blocks instead.
+Do not use suffixed conditionals with complex conditions with multiple logical operators. Use full `if`/`unless` blocks instead. Do not convert existing code to use suffixed conditionals if it is already using block conditionals.
 
 Prefer [:symbol_1, :symbol_2] array syntax over %i[] syntax for arrays of symbols.
 
