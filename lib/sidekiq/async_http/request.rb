@@ -65,8 +65,9 @@ module Sidekiq::AsyncHttp
     # @param synchronous [Boolean] If true, runs the request inline (for testing).
     # @param callback_args [#to_h, nil] Arguments to pass to callback workers via the
     #   Response/Error object. Must respond to to_h and contain only JSON-native types
-    #   (nil, true, false, String, Integer, Float, Array, Hash). Keys will be converted
-    #   to strings for serialization.
+    #   (nil, true, false, String, Integer, Float, Array, Hash). All hash keys (including
+    #   nested hashes and hashes in arrays) will be deeply converted to strings for serialization.
+    #   Access via response.callback_args or error.callback_args using symbol or string keys.
     #
     # @return [String] the request ID
     def execute(completion_worker:, error_worker:, sidekiq_job: nil, synchronous: false, callback_args: nil)

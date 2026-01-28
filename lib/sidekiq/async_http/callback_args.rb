@@ -7,7 +7,8 @@ module Sidekiq
     # CallbackArgs provides a structured way to access arguments passed from the original
     # job to the callback workers. Arguments are stored with string keys internally
     # (for JSON serialization compatibility) but can be accessed using either strings
-    # or symbols.
+    # or symbols. All hash keys, including nested hashes and hashes within arrays, are
+    # deeply converted to strings.
     #
     # @example Basic usage
     #   args = CallbackArgs.new(user_id: 123, action: "fetch")
@@ -16,6 +17,10 @@ module Sidekiq
     #   args.fetch(:missing, "default")  # => "default"
     #   args.include?(:user_id)  # => true
     #   args.to_h           # => {user_id: 123, action: "fetch"}
+    #
+    # @example Nested hashes
+    #   args = CallbackArgs.new(metadata: {tags: ["a", "b"], level: 1})
+    #   args[:metadata]     # => {"tags" => ["a", "b"], "level" => 1}
     #
     # @example From a response object
     #   response.callback_args[:user_id]

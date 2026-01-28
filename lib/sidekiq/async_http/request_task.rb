@@ -35,7 +35,8 @@ module Sidekiq::AsyncHttp
     # @param completion_worker [String] Class name for success callback.
     # @param error_worker [String, nil] Class name for error callback, optional.
     # @param callback_args [Hash] Callback arguments (with string keys) to include
-    #   in Response/Error objects. These will be accessible via response.callback_args.
+    #   in Response/Error objects. These will be accessible via response.callback_args
+    #   or error.callback_args.
     def initialize(request:, sidekiq_job:, completion_worker:, error_worker:, callback_args: {})
       @id = SecureRandom.uuid
       @request = request

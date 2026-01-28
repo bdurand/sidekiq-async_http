@@ -77,7 +77,8 @@ class FaradayRequestWorker
   class CompletionCallback
     include Sidekiq::Job
 
-    def perform(response)
+    def perform(response_hash)
+      response = Sidekiq::AsyncHttp::Response.load(response_hash)
       FaradayRequestWorker.set_response(response: response.as_json)
     end
   end
@@ -86,7 +87,8 @@ class FaradayRequestWorker
   class ErrorCallback
     include Sidekiq::Job
 
-    def perform(error)
+    def perform(error_hash)
+      error = Sidekiq::AsyncHttp::Error.load(error_hash)
       FaradayRequestWorker.set_response(error: error.as_json)
     end
   end
