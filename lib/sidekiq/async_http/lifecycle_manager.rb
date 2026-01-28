@@ -8,6 +8,10 @@ module Sidekiq
     #
     # Handles state transitions and provides predicates for checking the current state.
     # Thread-safe state management using Concurrent::AtomicReference.
+    #
+    # @note State transition methods (start!, stop!, drain!) use a read-then-write pattern.
+    #   Callers must provide external synchronization (e.g., via Mutex) when calling
+    #   these methods from multiple threads to prevent race conditions.
     class LifecycleManager
       include TimeHelper
 

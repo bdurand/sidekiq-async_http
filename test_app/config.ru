@@ -18,7 +18,7 @@ session_secret = File.read(session_key_file)
 
 # Mount Sidekiq Web UI under /sidekiq with session middleware
 map "/sidekiq" do
-  use Rack::Session::Cookie, secret: session_secret, same_site: true, max_age: 86400
+  use Rack::Session::Cookie, secret: session_secret, same_site: true, max_age: 86_400
   run Sidekiq::Web
 end
 
@@ -40,6 +40,26 @@ map "/status" do
   run StatusAction.new
 end
 
+map "/faraday" do
+  run FaradayAction.new
+end
+
+map "/run_faraday" do
+  run RunFaradayAction.new
+end
+
+map "/faraday_status" do
+  run FaradayStatusAction.new
+end
+
+map "/time" do
+  run TimeAction.new
+end
+
+map "/styles.css" do
+  run StylesAction.new
+end
+
 map "/favicon.ico" do
-  run lambda { |env| [204, {}, []] }
+  run ->(_env) { [204, {}, []] }
 end

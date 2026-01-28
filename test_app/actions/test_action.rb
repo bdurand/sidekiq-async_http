@@ -7,7 +7,7 @@ class TestAction
 
     [
       200,
-      {"Content-Type" => "text/plain; charset=utf-8"},
+      {"Content-Type" => "text/plain; charset=utf-8", "Date" => Time.now.httpdate},
       StreamingBody.new(delay)
     ]
   end

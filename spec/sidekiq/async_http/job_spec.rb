@@ -43,8 +43,8 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
 
         @called_args = []
 
-        on_completion(retry: false) do |response, *args|
-          @called_args << [response, *args]
+        on_completion(retry: false) do |response|
+          @called_args << [response]
         end
       end
     end
@@ -56,15 +56,9 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
     end
 
     it "defines a CompletionCallback worker class" do
-      worker_class::CompletionCallback.new.perform(response_data, "arg1", "arg2")
-      expect(called_args.size).to eq(1)
-      response, arg1, arg2 = called_args.first
-      expect(response).to be_a(Sidekiq::AsyncHttp::Response)
-      expect(response.status).to eq(200)
-      expect(response.body).to eq('{"message":"success"}')
-      expect(response.duration).to eq(0.123)
-      expect(arg1).to eq("arg1")
-      expect(arg2).to eq("arg2")
+      completion_worker = worker_class::CompletionCallback
+      args = completion_worker.instance_method(:perform).parameters
+      expect(args).to eq([%i[req response]]) # single response arg
     end
 
     it "allows setting Sidekiq options" do
@@ -80,8 +74,8 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
 
         @called_args = []
 
-        on_error(retry: false) do |error, *args|
-          @called_args << [error, *args]
+        on_error(retry: false) do |error|
+          @called_args << [error]
         end
       end
     end
@@ -93,15 +87,9 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
     end
 
     it "defines an ErrorCallback worker class" do
-      worker_class::ErrorCallback.new.perform(error_data, "err_arg1", "err_arg2")
-      expect(called_args.size).to eq(1)
-      error, arg1, arg2 = called_args.first
-      expect(error).to be_a(Sidekiq::AsyncHttp::Error)
-      expect(error.error_class).to eq(Timeout::Error)
-      expect(error.message).to eq("Request timed out")
-      expect(error.backtrace).to eq(["line 1", "line 2", "line 3"])
-      expect(arg1).to eq("err_arg1")
-      expect(arg2).to eq("err_arg2")
+      error_worker = worker_class::ErrorCallback
+      args = error_worker.instance_method(:perform).parameters
+      expect(args).to eq([%i[req error]]) # single error arg
     end
 
     it "allows setting Sidekiq options" do
@@ -125,12 +113,12 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
 
         @called_args = []
 
-        on_completion do |response, *args|
-          @called_args << [response, *args]
+        on_completion do |response|
+          @called_args << [response]
         end
 
-        on_error do |error, *args|
-          @called_args << [error, *args]
+        on_error do |error|
+          @called_args << [error]
         end
       end
     end
@@ -222,6 +210,24 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
         expect(task.completion_worker).to eq(TestWorkers::CompletionWorker)
         expect(task.error_worker).to eq(TestWorkers::ErrorWorker)
       end
+
+      it "passes callback_args to the request task" do
+        worker_instance.async_request(
+          :get,
+          "https://api.example.com/data",
+          callback_args: {custom: "callback", action: "args"}
+        )
+
+        task = request_tasks.first
+        expect(task.callback_args).to eq({"custom" => "callback", "action" => "args"})
+      end
+
+      it "defaults callback_args to empty hash when not provided" do
+        worker_instance.async_request(:get, "https://api.example.com/data")
+
+        task = request_tasks.first
+        expect(task.callback_args).to eq({})
+      end
     end
 
     describe "#async_get" do
@@ -233,21 +239,24 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
 
     describe "#async_post" do
       it "calls async_request with POST method" do
-        expect(worker_instance).to receive(:async_request).with(:post, "https://api.example.com/data", body: "payload", timeout: 15)
+        expect(worker_instance).to receive(:async_request).with(:post, "https://api.example.com/data", body: "payload",
+          timeout: 15)
         worker_instance.async_post("https://api.example.com/data", body: "payload", timeout: 15)
       end
     end
 
     describe "#async_put" do
       it "calls async_request with PUT method" do
-        expect(worker_instance).to receive(:async_request).with(:put, "https://api.example.com/data/1", json: {name: "test"}, timeout: 20)
+        expect(worker_instance).to receive(:async_request).with(:put, "https://api.example.com/data/1",
+          json: {name: "test"}, timeout: 20)
         worker_instance.async_put("https://api.example.com/data/1", json: {name: "test"}, timeout: 20)
       end
     end
 
     describe "#async_patch" do
       it "calls async_request with PATCH method" do
-        expect(worker_instance).to receive(:async_request).with(:patch, "https://api.example.com/data/1", body: "update", timeout: 25)
+        expect(worker_instance).to receive(:async_request).with(:patch, "https://api.example.com/data/1",
+          body: "update", timeout: 25)
         worker_instance.async_patch("https://api.example.com/data/1", body: "update", timeout: 25)
       end
     end
@@ -267,12 +276,12 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
 
         @called_args = []
 
-        on_completion do |response, *args|
-          @called_args << [response, *args]
+        on_completion do |response|
+          @called_args << [response]
         end
 
-        on_error do |error, *args|
-          @called_args << [error, *args]
+        on_error do |error|
+          @called_args << [error]
         end
 
         class << self
@@ -311,39 +320,38 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
       worker = worker_class.new
       expect(worker).to be_a(ActiveJob::Base)
       expect(worker.class.asynchronous_http_requests_supported?).to be false
-      expect {
+      expect do
         worker.async_get("https://api.example.com/data")
-      }.to raise_error(/Asynchronous HTTP requests are not supported/)
+      end.to raise_error(/Asynchronous HTTP requests are not supported/)
     end
 
-    it "handles extracting ActiveJob arguments in the completion callback" do
-      # ActiveJob wraps arguments in a hash when converting to Sidekiq jobs
-      activejob_args = [{"arguments" => ["arg1", "arg2", "arg3"]}]
+    it "defaults callback_args to empty hash for ActiveJob" do
+      sidekiq_job = {
+        "class" => "TestWorkers::ActiveJobWorker",
+        "jid" => "activejob-jid-123",
+        "args" => [
+          {
+            "arguments" => ["arg1", 789, "action2"],
+            "job_id" => "job-456",
+            "queue_name" => "default"
+          }
+        ]
+      }
 
-      worker_class::CompletionCallback.new.perform(response_data, *activejob_args)
+      worker_instance = worker_class.new
 
-      expect(worker_class.called_args.size).to eq(1)
-      response, arg1, arg2, arg3 = worker_class.called_args.first
-      expect(response).to be_a(Sidekiq::AsyncHttp::Response)
-      expect(response.status).to eq(200)
-      expect(arg1).to eq("arg1")
-      expect(arg2).to eq("arg2")
-      expect(arg3).to eq("arg3")
-    end
+      Sidekiq::AsyncHttp.start
 
-    it "handles extracting ActiveJob arguments in the error callback" do
-      # ActiveJob wraps arguments in a hash when converting to Sidekiq jobs
-      activejob_args = [{"arguments" => ["error_arg1", "error_arg2"]}]
+      captured_task = nil
+      Sidekiq::AsyncHttp::Context.with_job(sidekiq_job) do
+        allow(Sidekiq::AsyncHttp.processor).to receive(:enqueue) do |task|
+          captured_task = task
+        end
 
-      worker_class::ErrorCallback.new.perform(error_data, *activejob_args)
+        worker_instance.async_request(:get, "https://api.example.com/data")
+      end
 
-      expect(worker_class.called_args.size).to eq(1)
-      error, arg1, arg2 = worker_class.called_args.first
-      expect(error).to be_a(Sidekiq::AsyncHttp::Error)
-      expect(error.error_class).to eq(Timeout::Error)
-      expect(error.message).to eq("Request timed out")
-      expect(arg1).to eq("error_arg1")
-      expect(arg2).to eq("error_arg2")
+      expect(captured_task.callback_args).to eq({})
     end
   end
 end

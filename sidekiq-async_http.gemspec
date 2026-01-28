@@ -16,8 +16,6 @@ Gem::Specification.new do |spec|
     "changelog_uri" => "#{spec.homepage}/blob/main/CHANGELOG.md"
   }
 
-  spec.required_ruby_version = ">= 3.2"
-
   # Specify which files should be added to the gem when it is released.
   # The `git ls-files -z` loads the files in the RubyGem that have been added into git.
   ignore_files = %w[
@@ -38,6 +36,8 @@ Gem::Specification.new do |spec|
   end
 
   spec.require_paths = ["lib"]
+
+  spec.required_ruby_version = ">= 3.2"
 
   spec.add_dependency "sidekiq", ">= 7.0"
   spec.add_dependency "async", "~> 2.0"

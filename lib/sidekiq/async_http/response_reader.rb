@@ -32,7 +32,8 @@ module Sidekiq
         return nil unless async_response.body
 
         validate_content_length(headers_hash)
-        read_body_chunks(async_response)
+        body = read_body_chunks(async_response)
+        apply_charset_encoding(body, headers_hash)
       end
 
       private
@@ -53,7 +54,7 @@ module Sidekiq
       # Read body chunks while checking size.
       #
       # @param async_response [Async::HTTP::Protocol::Response] the async HTTP response
-      # @return [String] the response body
+      # @return [String] the response body in ASCII-8BIT encoding
       # @raise [ResponseTooLargeError] if body size exceeds max_response_size during read
       def read_body_chunks(async_response)
         chunks = []
@@ -71,7 +72,53 @@ module Sidekiq
           chunks << chunk
         end
 
-        chunks.join
+        # Join chunks and force to binary encoding to preserve raw bytes
+        chunks.join.force_encoding(Encoding::ASCII_8BIT)
+      end
+
+      # Extract charset from Content-Type header.
+      #
+      # @param headers_hash [Hash] the response headers
+      # @return [String, nil] the charset name or nil if not specified
+      def extract_charset(headers_hash)
+        content_type = headers_hash["content-type"]
+        return nil unless content_type
+
+        # Match charset parameter in Content-Type header
+        # Examples: "text/html; charset=utf-8", "application/json; charset=ISO-8859-1"
+        # Also handles quoted values: "text/html; charset="utf-8""
+        match = content_type.match(/;\s*charset\s*=\s*([^;\s]+)/i)
+        return nil unless match
+
+        charset = match[1].strip
+        # Remove surrounding quotes if present
+        charset.gsub(/\A["']|["']\z/, "")
+      end
+
+      # Apply charset encoding to response body.
+      #
+      # Sets the string encoding based on the charset specified in the Content-Type header.
+      # Falls back to ASCII-8BIT if charset is invalid or not recognized.
+      #
+      # @param body [String] the response body
+      # @param headers_hash [Hash] the response headers
+      # @return [String] the body with proper encoding set
+      def apply_charset_encoding(body, headers_hash)
+        return body unless body
+
+        charset = extract_charset(headers_hash)
+        return body unless charset
+
+        begin
+          # Try to find the encoding
+          encoding = Encoding.find(charset)
+          # Force the encoding on the binary string
+          body.force_encoding(encoding)
+        rescue ArgumentError
+          # Invalid or unknown charset, leave as binary
+          @config.logger&.warn("[Sidekiq::AsyncHttp] Unknown charset '#{charset}' in Content-Type header")
+          body
+        end
       end
     end
   end

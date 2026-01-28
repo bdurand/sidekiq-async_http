@@ -42,7 +42,8 @@ RSpec.describe "Crash Recovery", :integration do
     task = Sidekiq::AsyncHttp::RequestTask.new(
       request: request,
       sidekiq_job: job_payload,
-      completion_worker: "TestWorker::CompletionCallback"
+      completion_worker: "TestWorker::CompletionCallback",
+      error_worker: "TestWorker::ErrorCallback"
     )
 
     # Register with old timestamp to simulate orphaned request
@@ -88,7 +89,8 @@ RSpec.describe "Crash Recovery", :integration do
     task = Sidekiq::AsyncHttp::RequestTask.new(
       request: request,
       sidekiq_job: job_payload,
-      completion_worker: "TestWorker::CompletionCallback"
+      completion_worker: "TestWorker::CompletionCallback",
+      error_worker: "TestWorker::ErrorCallback"
     )
 
     # Register task (simulating it being in flight)
@@ -151,7 +153,8 @@ RSpec.describe "Crash Recovery", :integration do
     task = Sidekiq::AsyncHttp::RequestTask.new(
       request: request,
       sidekiq_job: job_payload,
-      completion_worker: "TestWorker::CompletionCallback"
+      completion_worker: "TestWorker::CompletionCallback",
+      error_worker: "TestWorker::ErrorCallback"
     )
 
     # Register in Redis
@@ -166,7 +169,7 @@ RSpec.describe "Crash Recovery", :integration do
     end
 
     # Wait for monitor to update (heartbeat_interval is 1 second)
-    sleep(1.5)
+    sleep(1.2)
 
     # Get new timestamp
     new_score = Sidekiq.redis do |redis|
@@ -203,7 +206,8 @@ RSpec.describe "Crash Recovery", :integration do
       task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
         sidekiq_job: job_payload,
-        completion_worker: "TestWorker::CompletionCallback"
+        completion_worker: "TestWorker::CompletionCallback",
+        error_worker: "TestWorker::ErrorCallback"
       )
 
       # Register with old timestamp

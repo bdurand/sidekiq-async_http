@@ -70,9 +70,7 @@ module Sidekiq
 
           raise if AsyncHttp.testing?
         ensure
-          if @reactor_thread == Thread.current
-            @tasks_lock.synchronize { @lifecycle.stopped! }
-          end
+          @tasks_lock.synchronize { @lifecycle.stopped! } if @reactor_thread == Thread.current
         end
 
         @monitor_thread.start
@@ -160,9 +158,7 @@ module Sidekiq
       # @raise [MaxCapacityError] if at max capacity
       # @return [void]
       def enqueue(task)
-        unless running?
-          raise NotRunningError.new("Cannot enqueue request: processor is #{state}")
-        end
+        raise NotRunningError.new("Cannot enqueue request: processor is #{state}") unless running?
 
         # Check capacity - raise error if at max connections
         if inflight_count >= @config.max_connections
@@ -235,6 +231,9 @@ module Sidekiq
 
       # Get the number of in-flight requests.
       #
+      # Unlike {#idle?}, this method does not require the tasks lock because
+      # it reads a single atomic value from a thread-safe Concurrent::Hash.
+      #
       # @return [Integer]
       def inflight_count
         @inflight_requests.size
@@ -275,7 +274,7 @@ module Sidekiq
       # ensure the processor is started and stopped properly.
       #
       # @api private
-      def run(&block)
+      def run
         start
         wait_for_running
         yield
@@ -377,7 +376,7 @@ module Sidekiq
           # Execute with timeout
           response_data = Async::Task.current.with_timeout(task.request.timeout || @config.default_request_timeout) do
             async_response = client.call(http_request)
-            headers_hash = async_response.headers.to_h
+            headers_hash = async_response.headers.to_h.transform_values(&:to_s)
             body = @response_reader.read_body(async_response, headers_hash) unless stopping? || stopped?
 
             # Build response object

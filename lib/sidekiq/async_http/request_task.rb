@@ -22,6 +22,9 @@ module Sidekiq::AsyncHttp
     # @return [String, nil] Class name for the error callback worker, optional
     attr_reader :error_worker
 
+    # @return [Hash] Callback arguments to include in Response/Error objects (never nil, defaults to empty hash)
+    attr_reader :callback_args
+
     # @return [Response, nil] The HTTP response, set on success
     attr_reader :response, :error
 
@@ -31,12 +34,16 @@ module Sidekiq::AsyncHttp
     # @param sidekiq_job [Hash] The Sidekiq job hash.
     # @param completion_worker [String] Class name for success callback.
     # @param error_worker [String, nil] Class name for error callback, optional.
-    def initialize(request:, sidekiq_job:, completion_worker:, error_worker: nil)
+    # @param callback_args [Hash] Callback arguments (with string keys) to include
+    #   in Response/Error objects. These will be accessible via response.callback_args
+    #   or error.callback_args.
+    def initialize(request:, sidekiq_job:, completion_worker:, error_worker:, callback_args: {})
       @id = SecureRandom.uuid
       @request = request
       @sidekiq_job = sidekiq_job
       @completion_worker = completion_worker
       @error_worker = error_worker
+      @callback_args = callback_args || {}
       @enqueued_at = nil
       @started_at = nil
       @completed_at = nil
@@ -96,7 +103,7 @@ module Sidekiq::AsyncHttp
     def duration
       return nil unless @started_at
 
-      (@completed_at || monotonic_time) - @started_at
+      ((@completed_at || monotonic_time) - @started_at).round(9)
     end
 
     # Get the worker class name from the Sidekiq job
@@ -109,12 +116,6 @@ module Sidekiq::AsyncHttp
     # @return [String] job ID
     def jid
       @sidekiq_job["jid"]
-    end
-
-    # Get the arguments from the Sidekiq job
-    # @return [Array] job arguments
-    def job_args
-      @sidekiq_job["args"]
     end
 
     # Re-enqueue the original Sidekiq job
@@ -136,7 +137,7 @@ module Sidekiq::AsyncHttp
       worker_class = ClassHelper.resolve_class_name(@completion_worker)
       raise "Completion worker class not set" unless worker_class
 
-      worker_class.set(async_http_continuation: "completion").perform_async(response.as_json, *job_args)
+      worker_class.set(async_http_continuation: "completion").perform_async(response)
     end
 
     # Called with the HTTP error on a failed request.
@@ -148,9 +149,16 @@ module Sidekiq::AsyncHttp
 
       @error = exception
 
-      error = Error.from_exception(exception, request_id: @id, duration: duration, url: request.url, http_method: request.http_method)
+      error = Error.from_exception(
+        exception,
+        request_id: @id,
+        duration: duration,
+        url: request.url,
+        http_method: request.http_method,
+        callback_args: @callback_args
+      )
       worker_class = ClassHelper.resolve_class_name(@error_worker)
-      worker_class.set(async_http_continuation: "error").perform_async(error.as_json, *job_args)
+      worker_class.set(async_http_continuation: "error").perform_async(error)
     end
 
     # Return true if the task successfully received a response from the server.
@@ -183,7 +191,8 @@ module Sidekiq::AsyncHttp
         duration: duration,
         request_id: id,
         url: request.url,
-        http_method: request.http_method
+        http_method: request.http_method,
+        callback_args: @callback_args
       )
     end
   end

@@ -19,7 +19,8 @@ RSpec.describe Sidekiq::AsyncHttp::InflightRegistry do
     Sidekiq::AsyncHttp::RequestTask.new(
       request: request,
       sidekiq_job: sidekiq_job,
-      completion_worker: "TestWorker::CompletionCallback"
+      completion_worker: "TestWorker::CompletionCallback",
+      error_worker: "TestWorker::ErrorCallback"
     )
   end
 
@@ -97,7 +98,8 @@ RSpec.describe Sidekiq::AsyncHttp::InflightRegistry do
       Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
         sidekiq_job: sidekiq_job.merge("jid" => "test-jid-456"),
-        completion_worker: "TestWorker::CompletionCallback"
+        completion_worker: "TestWorker::CompletionCallback",
+        error_worker: "TestWorker::ErrorCallback"
       )
     end
 
@@ -254,13 +256,15 @@ RSpec.describe Sidekiq::AsyncHttp::InflightRegistry do
       task2 = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
         sidekiq_job: sidekiq_job.merge("jid" => "test-jid-456"),
-        completion_worker: "TestWorker::CompletionCallback"
+        completion_worker: "TestWorker::CompletionCallback",
+        error_worker: "TestWorker::ErrorCallback"
       )
 
       task3 = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
         sidekiq_job: sidekiq_job.merge("jid" => "test-jid-789"),
-        completion_worker: "TestWorker::CompletionCallback"
+        completion_worker: "TestWorker::CompletionCallback",
+        error_worker: "TestWorker::ErrorCallback"
       )
 
       registry.register(task)
@@ -285,7 +289,8 @@ RSpec.describe Sidekiq::AsyncHttp::InflightRegistry do
       task2 = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
         sidekiq_job: sidekiq_job.merge("jid" => "test-jid-456"),
-        completion_worker: "TestWorker::CompletionCallback"
+        completion_worker: "TestWorker::CompletionCallback",
+        error_worker: "TestWorker::ErrorCallback"
       )
 
       registry.register(task)
@@ -324,7 +329,8 @@ RSpec.describe Sidekiq::AsyncHttp::InflightRegistry do
       task2 = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
         sidekiq_job: sidekiq_job.merge("jid" => "test-jid-456"),
-        completion_worker: "TestWorker::CompletionCallback"
+        completion_worker: "TestWorker::CompletionCallback",
+        error_worker: "TestWorker::ErrorCallback"
       )
       registry.register(task2)
 

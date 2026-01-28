@@ -9,6 +9,7 @@ RSpec.describe Sidekiq::AsyncHttp::ContinuationMiddleware do
 
   let(:response_data) do
     {
+      "_sidekiq_async_http_class" => "Sidekiq::AsyncHttp::Response",
       "status" => 200,
       "headers" => {"Content-Type" => "application/json"},
       "body" => {"encoding" => "text", "value" => '{"message":"success"}'},
@@ -22,6 +23,7 @@ RSpec.describe Sidekiq::AsyncHttp::ContinuationMiddleware do
 
   let(:error_data) do
     {
+      "_sidekiq_async_http_class" => "Sidekiq::AsyncHttp::Error",
       "class_name" => "Timeout::Error",
       "message" => "Request timed out",
       "backtrace" => ["line 1", "line 2", "line 3"],

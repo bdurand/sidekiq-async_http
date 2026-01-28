@@ -10,16 +10,18 @@ module Sidekiq::AsyncHttp
   #   class MyJob
   #     include Sidekiq::AsyncHttp::Job
   #
-  #     on_completion do |response, *args|
+  #     on_completion do |response|
+  #       user_id = response.callback_args[:user_id]
   #       # Handle successful response
   #     end
   #
-  #     on_error do |error, *args|
+  #     on_error do |error|
+  #       user_id = error.callback_args[:user_id]
   #       # Handle error
   #     end
   #
-  #     def perform(*args)
-  #       async_get("https://api.example.com/data")
+  #     def perform(user_id)
+  #       async_get("https://api.example.com/data", callback_args: {user_id: user_id})
   #     end
   #   end
   #
@@ -31,8 +33,8 @@ module Sidekiq::AsyncHttp
       #
       # @param base [Class] the class including this module
       def included(base)
-        unless defined?(ActiveJob::Base) && base < ActiveJob::Base
-          base.include(Sidekiq::Job) unless base.include?(Sidekiq::Job)
+        if !(defined?(ActiveJob::Base) && base < ActiveJob::Base) && !base.include?(Sidekiq::Job)
+          base.include(Sidekiq::Job)
         end
 
         base.extend(ClassMethods)
@@ -60,26 +62,22 @@ module Sidekiq::AsyncHttp
 
       # Defines a success callback for HTTP requests.
       #
+      # The callback receives a single Response argument. Access any callback
+      # arguments via response.callback_args.
+      #
       # @param options [Hash] Sidekiq options for the callback worker
-      # @yield [response, *args] block to execute on successful response
-      # @yieldparam response [Response] the HTTP response
-      # @yieldparam args [Array] additional arguments passed to the job
+      # @yield [response] block to execute on successful response
+      # @yieldparam response [Response] the HTTP response (includes callback_args)
       def on_completion(options = {}, &block)
         on_completion_block = block
-        active_job = defined?(ActiveJob::Base) && self < ActiveJob::Base
 
         worker_class = Class.new do
           include Sidekiq::Job
 
           sidekiq_options(options) unless options.empty?
 
-          define_method(:perform) do |response_data, *args|
-            response = Sidekiq::AsyncHttp::Response.load(response_data)
-            if active_job
-              original_args = args.first
-              args = original_args.fetch("arguments", []) if original_args.is_a?(Hash)
-            end
-            on_completion_block.call(response, *args)
+          define_method(:perform) do |response|
+            on_completion_block.call(response)
           end
         end
 
@@ -93,7 +91,7 @@ module Sidekiq::AsyncHttp
       # @raise [ArgumentError] if worker_class is not a valid Sidekiq job class
       def completion_callback_worker=(worker_class)
         unless worker_class.is_a?(Class) && worker_class.included_modules.include?(Sidekiq::Job)
-          raise ArgumentError, "completion_callback_worker must be a Sidekiq::Job class"
+          raise ArgumentError.new("completion_callback_worker must be a Sidekiq::Job class")
         end
 
         @completion_callback_worker = worker_class
@@ -101,26 +99,22 @@ module Sidekiq::AsyncHttp
 
       # Defines an error callback for HTTP requests.
       #
+      # The callback receives a single Error argument. Access any callback
+      # arguments via error.callback_args.
+      #
       # @param options [Hash] Sidekiq options for the callback worker
-      # @yield [error, *args] block to execute on error
-      # @yieldparam error [Error] the HTTP error
-      # @yieldparam args [Array] additional arguments passed to the job
+      # @yield [error] block to execute on error
+      # @yieldparam error [Error] the HTTP error (includes callback_args)
       def on_error(options = {}, &block)
         error_callback_block = block
-        active_job = defined?(ActiveJob::Base) && self < ActiveJob::Base
 
         worker_class = Class.new do
           include Sidekiq::Job
 
           sidekiq_options(options) unless options.empty?
 
-          define_method(:perform) do |error_data, *args|
-            error = Sidekiq::AsyncHttp::Error.load(error_data)
-            if active_job
-              original_args = args.first
-              args = original_args.fetch("arguments", []) if original_args.is_a?(Hash)
-            end
-            error_callback_block.call(error, *args)
+          define_method(:perform) do |error|
+            error_callback_block.call(error)
           end
         end
 
@@ -134,7 +128,7 @@ module Sidekiq::AsyncHttp
       # @raise [ArgumentError] if worker_class is not a valid Sidekiq job class
       def error_callback_worker=(worker_class)
         unless worker_class.is_a?(Class) && worker_class.included_modules.include?(Sidekiq::Job)
-          raise ArgumentError, "error_callback_worker must be a Sidekiq::Job class"
+          raise ArgumentError.new("error_callback_worker must be a Sidekiq::Job class")
         end
 
         @error_callback_worker = worker_class
@@ -158,23 +152,34 @@ module Sidekiq::AsyncHttp
     # @param method [Symbol] HTTP method (:get, :post, :put, :patch, :delete)
     # @param url [String] the request URL
     # @param options [Hash] additional request options
+    # @option options [Class] :completion_worker Worker class to call on successful response
+    # @option options [Class] :error_worker Worker class to call on error
+    # @option options [#to_h] :callback_args Arguments to include in the Response/Error object.
+    #   Must respond to to_h and contain only JSON-native types. Access via response.callback_args.
+    #
     # @return [String] request ID
     def async_request(method, url, **options)
       options = options.dup
-      completion_worker ||= options.delete(:completion_worker)
-      error_worker ||= options.delete(:error_worker)
+      completion_worker = options.delete(:completion_worker)
+      error_worker = options.delete(:error_worker)
+      callback_args = options.delete(:callback_args)
 
       completion_worker ||= self.class.completion_callback_worker
       error_worker ||= self.class.error_callback_worker
 
       request = async_http_client.async_request(method, url, **options)
-      request.execute(completion_worker: completion_worker, error_worker: error_worker)
+      request.execute(
+        completion_worker: completion_worker,
+        error_worker: error_worker,
+        callback_args: callback_args
+      )
     end
 
     # Convenience method for GET requests.
     #
     # @param url [String] the request URL
-    # @param options [Hash] additional request options
+    # @param options [Hash] additional request options (see {#async_request})
+    #
     # @return [String] request ID
     def async_get(url, **options)
       async_request(:get, url, **options)
@@ -183,7 +188,8 @@ module Sidekiq::AsyncHttp
     # Convenience method for POST requests.
     #
     # @param url [String] the request URL
-    # @param options [Hash] additional request options
+    # @param options [Hash] additional request options (see {#async_request})
+    #
     # @return [String] request ID
     def async_post(url, **options)
       async_request(:post, url, **options)
@@ -192,7 +198,8 @@ module Sidekiq::AsyncHttp
     # Convenience method for PUT requests.
     #
     # @param url [String] the request URL
-    # @param options [Hash] additional request options
+    # @param options [Hash] additional request options (see {#async_request})
+    #
     # @return [String] request ID
     def async_put(url, **options)
       async_request(:put, url, **options)
@@ -201,7 +208,8 @@ module Sidekiq::AsyncHttp
     # Convenience method for PATCH requests.
     #
     # @param url [String] the request URL
-    # @param options [Hash] additional request options
+    # @param options [Hash] additional request options (see {#async_request})
+    #
     # @return [String] request ID
     def async_patch(url, **options)
       async_request(:patch, url, **options)
@@ -210,7 +218,8 @@ module Sidekiq::AsyncHttp
     # Convenience method for DELETE requests.
     #
     # @param url [String] the request URL
-    # @param options [Hash] additional request options
+    # @param options [Hash] additional request options (see {#async_request})
+    #
     # @return [String] request ID
     def async_delete(url, **options)
       async_request(:delete, url, **options)

@@ -145,6 +145,62 @@ RSpec.describe Sidekiq::AsyncHttp::Request do
         expect(captured_task.enqueued_at).to be_a(Time)
         expect(captured_task.enqueued_at).to be <= Time.now
       end
+
+      context "with callback_args" do
+        it "passes callback_args to the RequestTask" do
+          captured_task = nil
+          allow(processor).to receive(:enqueue) { |task| captured_task = task }
+
+          request.execute(
+            sidekiq_job: job_hash,
+            completion_worker: TestWorkers::CompletionWorker,
+            error_worker: TestWorkers::ErrorWorker,
+            callback_args: {custom: "args", action: "test"}
+          )
+
+          expect(captured_task.callback_args).to eq({"custom" => "args", "action" => "test"})
+        end
+
+        it "requires callback_args to be a hash" do
+          allow(processor).to receive(:enqueue)
+
+          expect do
+            request.execute(
+              sidekiq_job: job_hash,
+              completion_worker: TestWorkers::CompletionWorker,
+              error_worker: TestWorkers::ErrorWorker,
+              callback_args: "single_value"
+            )
+          end.to raise_error(ArgumentError, /callback_args must respond to to_h/)
+        end
+
+        it "uses callback_args when provided" do
+          captured_task = nil
+          allow(processor).to receive(:enqueue) { |task| captured_task = task }
+
+          request.execute(
+            sidekiq_job: job_hash,
+            completion_worker: TestWorkers::CompletionWorker,
+            error_worker: TestWorkers::ErrorWorker,
+            callback_args: {custom: "args"}
+          )
+
+          expect(captured_task.callback_args).to eq({"custom" => "args"})
+        end
+
+        it "defaults to empty hash when callback_args is not provided" do
+          captured_task = nil
+          allow(processor).to receive(:enqueue) { |task| captured_task = task }
+
+          request.execute(
+            sidekiq_job: job_hash,
+            completion_worker: TestWorkers::CompletionWorker,
+            error_worker: TestWorkers::ErrorWorker
+          )
+
+          expect(captured_task.callback_args).to eq({})
+        end
+      end
     end
 
     context "when processor is not running" do

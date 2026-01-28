@@ -49,7 +49,8 @@ RSpec.describe "Streaming Response Integration", :integration do
           "jid" => "jid-#{i}",
           "args" => [i]
         },
-        completion_worker: "TestWorkers::CompletionWorker"
+        completion_worker: "TestWorkers::CompletionWorker",
+        error_worker: "TestWorkers::ErrorWorker"
       )
 
       processor.enqueue(task)

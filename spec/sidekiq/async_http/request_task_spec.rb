@@ -25,13 +25,14 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        completion_worker: completion_worker
+        completion_worker: completion_worker,
+        error_worker: error_worker
       )
 
       expect(task.request).to eq(request)
       expect(task.sidekiq_job).to eq(sidekiq_job)
       expect(task.completion_worker).to eq(completion_worker)
-      expect(task.error_worker).to be_nil
+      expect(task.error_worker).to eq(error_worker)
     end
 
     it "accepts an optional error_worker" do
@@ -45,16 +46,41 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       expect(task.error_worker).to eq(error_worker)
     end
 
+    it "accepts optional callback_args as a hash" do
+      task = described_class.new(
+        request: request,
+        sidekiq_job: sidekiq_job,
+        completion_worker: completion_worker,
+        error_worker: error_worker,
+        callback_args: {user_id: 123, action: "fetch"}
+      )
+
+      expect(task.callback_args).to eq({user_id: 123, action: "fetch"})
+    end
+
+    it "defaults callback_args to an empty hash when not provided" do
+      task = described_class.new(
+        request: request,
+        sidekiq_job: sidekiq_job,
+        completion_worker: completion_worker,
+        error_worker: error_worker
+      )
+
+      expect(task.callback_args).to eq({})
+    end
+
     it "generates a unique ID" do
       task1 = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        completion_worker: completion_worker
+        completion_worker: completion_worker,
+        error_worker: error_worker
       )
       task2 = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        completion_worker: completion_worker
+        completion_worker: completion_worker,
+        error_worker: error_worker
       )
 
       expect(task1.id).to be_a(String)
@@ -66,7 +92,8 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        completion_worker: completion_worker
+        completion_worker: completion_worker,
+        error_worker: error_worker
       )
 
       expect(task.enqueued_at).to be_nil
@@ -80,7 +107,8 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        completion_worker: completion_worker
+        completion_worker: completion_worker,
+        error_worker: error_worker
       )
 
       expect(task.job_worker_class).to eq(TestWorkers::Worker)
@@ -92,22 +120,11 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        completion_worker: completion_worker
+        completion_worker: completion_worker,
+        error_worker: error_worker
       )
 
       expect(task.jid).to eq("job-123")
-    end
-  end
-
-  describe "#job_args" do
-    it "returns the arguments from the Sidekiq job" do
-      task = described_class.new(
-        request: request,
-        sidekiq_job: sidekiq_job,
-        completion_worker: completion_worker
-      )
-
-      expect(task.job_args).to eq([1, 2, 3])
     end
   end
 
@@ -116,7 +133,8 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        completion_worker: completion_worker
+        completion_worker: completion_worker,
+        error_worker: error_worker
       )
 
       expect(task.enqueued_duration).to be_nil
@@ -128,7 +146,8 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        completion_worker: completion_worker
+        completion_worker: completion_worker,
+        error_worker: error_worker
       )
 
       expect(task.duration).to be_nil
@@ -140,7 +159,8 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        completion_worker: completion_worker
+        completion_worker: completion_worker,
+        error_worker: error_worker
       )
 
       expect(Sidekiq::Client).to receive(:push).with(sidekiq_job).and_return("new-jid")
@@ -159,7 +179,8 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task = described_class.new(
         request: request,
         sidekiq_job: job_with_metadata,
-        completion_worker: completion_worker
+        completion_worker: completion_worker,
+        error_worker: error_worker
       )
 
       expect(Sidekiq::Client).to receive(:push) do |job|
@@ -173,11 +194,39 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
   end
 
   describe "#success!" do
-    it "enqueues the success worker" do
+    it "enqueues the success worker with response containing callback_args" do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
-        completion_worker: "TestWorkers::CompletionWorker"
+        completion_worker: "TestWorkers::CompletionWorker",
+        error_worker: "TestWorkers::ErrorWorker",
+        callback_args: {"user_id" => 123, "action" => "fetch"}
+      )
+      task.started!
+
+      response = task.build_response(
+        status: 200,
+        headers: {},
+        body: "OK"
+      )
+
+      task.success!(response)
+      expect(task.response).to eq(response)
+      expect(task.success?).to be(true)
+      expect(TestWorkers::CompletionWorker.jobs.size).to eq(1)
+      job = TestWorkers::CompletionWorker.jobs.first
+      # Args should be a single element: the response with callback_args embedded
+      expect(job["args"].size).to eq(1)
+      response_json = job["args"].first
+      expect(response_json["callback_args"]).to eq({"user_id" => 123, "action" => "fetch"})
+    end
+
+    it "uses empty callback_args when not provided" do
+      task = described_class.new(
+        request: request,
+        sidekiq_job: sidekiq_job,
+        completion_worker: "TestWorkers::CompletionWorker",
+        error_worker: "TestWorkers::ErrorWorker"
       )
 
       response = Sidekiq::AsyncHttp::Response.new(
@@ -191,16 +240,39 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       )
 
       task.success!(response)
-      expect(task.response).to eq(response)
-      expect(task.success?).to be(true)
       expect(TestWorkers::CompletionWorker.jobs.size).to eq(1)
       job = TestWorkers::CompletionWorker.jobs.first
-      expect(job["args"]).to eq([response.as_json, 1, 2, 3])
+      expect(job["args"].size).to eq(1)
+      response_json = job["args"].first
+      expect(response_json["callback_args"]).to eq({})
     end
   end
 
   describe "#error!" do
-    it "enqueues the error worker when set" do
+    it "enqueues the error worker with error containing callback_args" do
+      task = described_class.new(
+        request: request,
+        sidekiq_job: sidekiq_job,
+        completion_worker: "TestWorkers::CompletionWorker",
+        error_worker: "TestWorkers::ErrorWorker",
+        callback_args: {"user_id" => 123, "action" => "fetch"}
+      )
+      task.completed!
+
+      exception = StandardError.new("Something went wrong")
+
+      task.error!(exception)
+      expect(task.error).to eq(exception)
+      expect(task.error?).to be(true)
+      expect(TestWorkers::ErrorWorker.jobs.size).to eq(1)
+      job = TestWorkers::ErrorWorker.jobs.first
+      # Args should be a single element: the error with callback_args embedded
+      expect(job["args"].size).to eq(1)
+      error_json = job["args"].first
+      expect(error_json["callback_args"]).to eq({"user_id" => 123, "action" => "fetch"})
+    end
+
+    it "uses empty callback_args when not provided" do
       task = described_class.new(
         request: request,
         sidekiq_job: sidekiq_job,
@@ -210,14 +282,13 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task.completed!
 
       exception = StandardError.new("Something went wrong")
-      error = Sidekiq::AsyncHttp::Error.from_exception(exception, request_id: task.id, duration: task.duration, url: request.url, http_method: request.http_method)
 
       task.error!(exception)
-      expect(task.error).to eq(exception)
-      expect(task.error?).to be(true)
       expect(TestWorkers::ErrorWorker.jobs.size).to eq(1)
       job = TestWorkers::ErrorWorker.jobs.first
-      expect(job["args"]).to eq([error.as_json, 1, 2, 3])
+      expect(job["args"].size).to eq(1)
+      error_json = job["args"].first
+      expect(error_json["callback_args"]).to eq({})
     end
   end
 end

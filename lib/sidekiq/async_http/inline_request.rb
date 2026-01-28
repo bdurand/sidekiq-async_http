@@ -35,7 +35,7 @@ module Sidekiq::AsyncHttp
         when :patch then Net::HTTP::Patch
         when :delete then Net::HTTP::Delete
         else
-          raise ArgumentError, "Unsupported method: #{request.http_method}"
+          raise ArgumentError.new("Unsupported method: #{request.http_method}")
         end
 
         req = request_class.new(uri.request_uri)
@@ -63,23 +63,29 @@ module Sidekiq::AsyncHttp
           duration: duration,
           request_id: @task.id,
           url: request.url,
-          http_method: request.http_method
+          http_method: request.http_method,
+          callback_args: @task.callback_args
         )
 
         # Invoke completion callback inline
-        @task.completion_worker.new.perform(response.as_json, *@task.sidekiq_job["args"])
+        @task.completion_worker.new.perform(response)
       rescue => e
         # Calculate duration
         end_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         duration = end_time - start_time
 
-        if @task.error_worker
-          # Build error object and invoke error callback inline
-          error = Error.from_exception(e, request_id: @task.id, duration: duration, url: request.url, http_method: request.http_method)
-          @task.error_worker.new.perform(error.as_json, *@task.sidekiq_job["args"])
-        else
-          raise e
-        end
+        raise e unless @task.error_worker
+
+        # Build error object and invoke error callback inline
+        error = Error.from_exception(
+          e,
+          request_id: @task.id,
+          duration: duration,
+          url: request.url,
+          http_method: request.http_method,
+          callback_args: @task.callback_args
+        )
+        @task.error_worker.new.perform(error)
       end
 
       @id
