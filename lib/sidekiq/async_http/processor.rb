@@ -97,9 +97,7 @@ module Sidekiq
         # Wait for in-flight requests to complete
         if timeout && timeout > 0
           deadline = monotonic_time + timeout
-          while !idle? && monotonic_time < deadline
-            sleep(LifecycleManager::POLL_INTERVAL)
-          end
+          sleep(LifecycleManager::POLL_INTERVAL) while !idle? && monotonic_time < deadline
         end
 
         # Re-enqueue any remaining in-flight and pending tasks
@@ -389,12 +387,17 @@ module Sidekiq
 
           return if stopping? || stopped?
 
-          task.completed!
           response = task.build_response(**response_data)
-          handle_success(task, response)
+          if task.raise_error_responses && !response.success?
+            http_error = HttpError.new(response)
+            @metrics.record_error(http_error.error_type)
+            @stats.record_error(http_error.error_type)
+            handle_error(task, http_error)
+          else
+            handle_completion(task, response)
+          end
         rescue => e
-          task.completed!
-          error_type = Error.error_type(e)
+          error_type = RequestError.error_type(e)
           @metrics.record_error(error_type)
           @stats.record_error(error_type)
           handle_error(task, e)
@@ -404,7 +407,7 @@ module Sidekiq
             @inflight_requests.delete(task.id)
           end
           @metrics.record_request_complete(task.duration)
-          @stats.record_request(task.duration)
+          @stats.record_request(task.response&.status, task.duration)
 
           @testing_callback&.call(task) if AsyncHttp.testing?
         end
@@ -415,13 +418,13 @@ module Sidekiq
       # @param task [RequestTask] the request task
       # @param response [Response] the response object
       # @return [void]
-      def handle_success(task, response)
+      def handle_completion(task, response)
         if stopped?
           @config.logger&.warn("[Sidekiq::AsyncHttp] Request #{task.id} succeeded after processor was stopped")
           return
         end
 
-        task.success!(response)
+        task.completed!(response)
 
         # Unregister from Redis after successful callback enqueue
         @inflight_registry.unregister(task.id)

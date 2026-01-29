@@ -67,16 +67,27 @@
 
       <div class="form-group">
         <label for="timeout">Timeout (seconds)</label>
-        <input
-          type="number"
-          id="timeout"
-          name="timeout"
-          value="30"
-          min="1"
-          max="60"
-          step="1"
-          autocomplete="off"
-        >
+        <div style="display: flex; align-items: center; gap: 15px;">
+          <input
+            type="number"
+            id="timeout"
+            name="timeout"
+            value="30"
+            min="1"
+            max="60"
+            step="1"
+            autocomplete="off"
+          >
+          <div class="checkbox-group">
+            <input
+              type="checkbox"
+              id="raise_error_responses"
+              name="raise_error_responses"
+              value="1"
+            >
+            <label for="raise_error_responses" style="white-space: nowrap;">Raise HTTP Errors</label>
+          </div>
+        </div>
         <div class="help-text">Request timeout in seconds</div>
       </div>
 

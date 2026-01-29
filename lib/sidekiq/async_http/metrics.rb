@@ -33,12 +33,12 @@ module Sidekiq
         @inflight_requests.decrement
         @total_requests.increment
 
-        if duration
-          loop do
-            current_total = @total_duration.get
-            new_total = current_total + duration
-            break if @total_duration.compare_and_set(current_total, new_total)
-          end
+        return unless duration
+
+        loop do
+          current_total = @total_duration.get
+          new_total = current_total + duration
+          break if @total_duration.compare_and_set(current_total, new_total)
         end
       end
 

@@ -682,7 +682,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       )
 
       captured_response = nil
-      allow(processor).to receive(:handle_success) do |_req, resp|
+      allow(processor).to receive(:handle_completion) do |_req, resp|
         captured_response = resp
       end
 
@@ -697,10 +697,10 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       expect(captured_response.duration).to be_a(Float)
     end
 
-    it "calls handle_success on successful response" do
+    it "calls handle_completion on successful response" do
       stub_http_response
 
-      expect(processor).to receive(:handle_success).with(mock_request, kind_of(Sidekiq::AsyncHttp::Response))
+      expect(processor).to receive(:handle_completion).with(mock_request, kind_of(Sidekiq::AsyncHttp::Response))
 
       Async do
         processor.send(:process_request, mock_request)
@@ -909,12 +909,12 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
     end
 
     it "resolves worker class from string name" do
-      processor.send(:handle_success, mock_request, response)
+      processor.send(:handle_completion, mock_request, response)
       expect(TestWorkers::CompletionWorker.jobs.size).to eq(1)
     end
 
     it "enqueues success worker with response hash containing callback_args and tagged as a completion continuation" do
-      processor.send(:handle_success, mock_request, response)
+      processor.send(:handle_completion, mock_request, response)
       expect(TestWorkers::CompletionWorker.jobs.size).to eq(1)
       job = TestWorkers::CompletionWorker.jobs.last
       job_args = job["args"]
@@ -934,7 +934,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       config_with_logger = Sidekiq::AsyncHttp::Configuration.new(logger: logger)
       processor_with_logger = described_class.new(config_with_logger)
       processor_with_logger.run do
-        processor_with_logger.send(:handle_success, mock_request, response)
+        processor_with_logger.send(:handle_completion, mock_request, response)
       end
 
       expect(log_output.string).to match(

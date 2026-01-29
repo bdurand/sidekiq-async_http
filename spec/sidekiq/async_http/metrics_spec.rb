@@ -102,7 +102,7 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
     it "supports all error types" do
       error_types = %i[timeout connection ssl protocol unknown]
 
-      error_types.each_with_index do |type, index|
+      error_types.each_with_index do |type, _index|
         metrics.record_error(type)
       end
 
@@ -153,7 +153,7 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
     end
 
     it "returns consistent snapshot" do
-      10.times do |i|
+      10.times do
         metrics.record_request_start
         metrics.record_request_complete(1.0)
       end
@@ -194,9 +194,9 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
       num_threads = 10
       requests_per_thread = 100
 
-      num_threads.times do |i|
+      num_threads.times do
         threads << Thread.new do
-          requests_per_thread.times do |j|
+          requests_per_thread.times do
             metrics.record_request_start
             metrics.record_request_complete(rand(0.1..2.0))
           end
@@ -215,9 +215,9 @@ RSpec.describe Sidekiq::AsyncHttp::Metrics do
       errors_per_thread = 50
       error_types = %i[timeout connection ssl protocol unknown]
 
-      num_threads.times do |i|
+      num_threads.times do
         threads << Thread.new do
-          errors_per_thread.times do |j|
+          errors_per_thread.times do
             error_type = error_types.sample
             metrics.record_error(error_type)
           end

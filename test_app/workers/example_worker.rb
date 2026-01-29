@@ -12,7 +12,6 @@ class ExampleWorker
     sidekiq_options encrypted_args: :response
 
     def perform(response)
-      response = Sidekiq::AsyncHttp::Response.load(response)
       method = response.callback_args[:method]
       url = response.callback_args[:url]
       path = write_response(response)
@@ -67,8 +66,7 @@ class ExampleWorker
 
     sidekiq_options encrypted_args: :error_hash
 
-    def perform(error_hash)
-      error = Sidekiq::AsyncHttp::Error.load(error_hash)
+    def perform(error)
       method = error.callback_args[:method]
       url = error.callback_args[:url]
       Sidekiq.logger.error("ExampleWorker: Request #{method.upcase} #{url} failed with error: #{error.error_class.name} #{error.message}")

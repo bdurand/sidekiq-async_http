@@ -19,6 +19,7 @@ class RunFaradayAction
     timeout = request.params["timeout"]&.to_f || 30.0
     method = request.params["method"] || "GET"
     url_param = request.params["url"] || "/test"
+    raise_error_responses = request.params["raise_error_responses"] == "1"
 
     # Build the full URL
     port = ENV.fetch("PORT", "9292")
@@ -30,10 +31,10 @@ class RunFaradayAction
 
     if context == "sidekiq"
       # Enqueue a worker to make the request from Sidekiq context
-      FaradayRequestWorker.perform_async(method, url, timeout)
+      FaradayRequestWorker.perform_async(method, url, timeout, raise_error_responses)
     else
       # Make the request directly (outside Sidekiq context)
-      make_direct_request(method, url, timeout)
+      make_direct_request(method, url, timeout, raise_error_responses)
     end
 
     [204, {}, []]
@@ -49,8 +50,9 @@ class RunFaradayAction
   # @param method [String] HTTP method (e.g., "GET", "POST").
   # @param url [String] The URL to request.
   # @param timeout [Float] Request timeout in seconds.
+  # @param raise_error_responses [Boolean] Whether to raise errors for HTTP error responses.
   # @return [void]
-  def make_direct_request(method, url, timeout)
+  def make_direct_request(method, url, timeout, raise_error_responses)
     uri = URI.parse(url)
     base_url = "#{uri.scheme}://#{uri.host}:#{uri.port}"
     path = uri.path
@@ -66,6 +68,7 @@ class RunFaradayAction
       req.options.timeout = timeout
       req.options.context = {
         sidekiq_async_http: {
+          raise_error_responses: raise_error_responses,
           callback_args: {mode: "inline", uuid: SecureRandom.uuid}
         }
       }
