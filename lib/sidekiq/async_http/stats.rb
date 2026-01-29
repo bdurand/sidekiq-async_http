@@ -120,8 +120,8 @@ module Sidekiq
             "duration" => (stats["duration"] || 0).to_f.round(6),
             "errors" => (stats["errors"] || 0).to_i,
             "refused" => (stats["refused"] || 0).to_i,
-            "http_status_counts" => http_status_counts,
-            "error_type_counts" => error_type_counts
+            "http_status_counts" => http_status_counts.sort.to_h,
+            "error_type_counts" => error_type_counts.sort.to_h
           }
         end
       end

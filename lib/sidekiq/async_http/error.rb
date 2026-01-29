@@ -47,6 +47,11 @@ module Sidekiq
         raise NotImplementedError, "Subclasses must implement #request_id"
       end
 
+      # @return [Class] the class of the exception that caused the error
+      def error_class
+        raise NotImplementedError, "Subclasses must implement #error_class"
+      end
+
       # @return [CallbackArgs] the callback arguments
       def callback_args
         raise NotImplementedError, "Subclasses must implement #callback_args"
@@ -137,6 +142,10 @@ module Sidekiq
 
       def request_id
         response.request_id
+      end
+
+      def error_class
+        self.class
       end
 
       def callback_args

@@ -72,8 +72,7 @@ module Sidekiq::AsyncHttp
     #   and calls the error_worker instead of completion_worker. Defaults to false.
     #
     # @return [String] the request ID
-    def execute(completion_worker:, error_worker:, sidekiq_job: nil, synchronous: false, callback_args: nil,
-      raise_error_responses: false)
+    def execute(completion_worker:, error_worker:, sidekiq_job: nil, synchronous: false, callback_args: nil, raise_error_responses: false)
       # Get current job if not provided
       sidekiq_job ||= (defined?(Sidekiq::AsyncHttp::Context) ? Sidekiq::AsyncHttp::Context.current_job : nil)
 

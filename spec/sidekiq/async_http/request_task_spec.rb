@@ -193,7 +193,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
     end
   end
 
-  describe "#success!" do
+  describe "#completed!" do
     it "enqueues the success worker with response containing callback_args" do
       task = described_class.new(
         request: request,
@@ -210,7 +210,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
         body: "OK"
       )
 
-      task.success!(response)
+      task.completed!(response)
       expect(task.response).to eq(response)
       expect(task.success?).to be(true)
       expect(TestWorkers::CompletionWorker.jobs.size).to eq(1)
@@ -239,7 +239,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
         http_method: :get
       )
 
-      task.success!(response)
+      task.completed!(response)
       expect(TestWorkers::CompletionWorker.jobs.size).to eq(1)
       job = TestWorkers::CompletionWorker.jobs.first
       expect(job["args"].size).to eq(1)
@@ -257,7 +257,6 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
         error_worker: "TestWorkers::ErrorWorker",
         callback_args: {"user_id" => 123, "action" => "fetch"}
       )
-      task.completed!
 
       exception = StandardError.new("Something went wrong")
 
@@ -279,7 +278,6 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
         completion_worker: "TestWorkers::CompletionWorker",
         error_worker: "TestWorkers::ErrorWorker"
       )
-      task.completed!
 
       exception = StandardError.new("Something went wrong")
 

@@ -74,12 +74,6 @@ module Sidekiq::AsyncHttp
       @started_at = monotonic_time
     end
 
-    # Mark task as completed
-    # @return [void]
-    def completed!
-      @completed_at = monotonic_time
-    end
-
     # Returns the wall clock time when the task was enqueued.
     #
     # @return [Time, nil] The enqueued time or nil if not enqueued.
@@ -144,22 +138,14 @@ module Sidekiq::AsyncHttp
     #
     # @param response [Sidekiq::AsyncHttp::Response] the HTTP response
     # @return [void]
-    def success!(response)
-      completed! unless completed_at
-
+    def completed!(response)
+      @completed_at = monotonic_time
       @response = response
 
-      # Check if we should raise an error for non-2xx responses
-      if @raise_error_responses && !response.success?
-        http_error = HttpError.new(response)
-        @error = http_error
+      completion_worker_class = ClassHelper.resolve_class_name(@completion_worker)
+      return unless completion_worker_class
 
-        error_worker_class = ClassHelper.resolve_class_name(@error_worker)
-        error_worker_class.set(async_http_continuation: "error").perform_async(http_error)
-      else
-        completion_worker_class = ClassHelper.resolve_class_name(@completion_worker)
-        completion_worker_class.set(async_http_continuation: "completion").perform_async(response)
-      end
+      completion_worker_class.set(async_http_continuation: "completion").perform_async(response)
     end
 
     # Called with the HTTP error on a failed request.
@@ -167,8 +153,7 @@ module Sidekiq::AsyncHttp
     # @param exception [Exception] the error that occurred
     # @return [void]
     def error!(exception)
-      completed! unless completed_at
-
+      @completed_at = monotonic_time
       @error = exception
 
       wrapped_error = exception

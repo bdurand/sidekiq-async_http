@@ -26,7 +26,7 @@ class FaradayRequestWorker
     # @param payload [Hash] The response or error payload to store.
     # @return [void]
     def set_response(payload)
-      Sidekiq.redis { |conn| conn.setex(REDIS_KEY, 60, JSON.pretty_generate(payload)) }
+      Sidekiq.redis { |conn| conn.set(REDIS_KEY, JSON.pretty_generate(payload), ex: 60) }
     end
 
     # Get the stored response from Redis.
@@ -55,7 +55,7 @@ class FaradayRequestWorker
   # @param url [String] The full URL to request.
   # @param timeout [Float, nil] Request timeout in seconds.
   # @return [void]
-  def perform(method, url, timeout)
+  def perform(method, url, timeout, raise_error_responses)
     uri = URI.parse(url)
     base_url = "#{uri.scheme}://#{uri.host}:#{uri.port}"
     path = uri.path
@@ -67,6 +67,7 @@ class FaradayRequestWorker
       req.options.timeout = timeout if timeout
       req.options.context = {
         sidekiq_async_http: {
+          raise_error_responses: raise_error_responses,
           callback_args: {mode: "async", uuid: SecureRandom.uuid}
         }
       }

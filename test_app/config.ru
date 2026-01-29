@@ -56,6 +56,10 @@ map "/time" do
   run TimeAction.new
 end
 
+map "/error" do
+  run ->(_env) { [500, {"Content-Type" => "text/plain; charset=utf-8"}, ["Internal Server Error"]] }
+end
+
 map "/styles.css" do
   run StylesAction.new
 end

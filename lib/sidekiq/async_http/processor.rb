@@ -387,7 +387,6 @@ module Sidekiq
 
           return if stopping? || stopped?
 
-          task.completed!
           response = task.build_response(**response_data)
           if task.raise_error_responses && !response.success?
             http_error = HttpError.new(response)
@@ -395,10 +394,9 @@ module Sidekiq
             @stats.record_error(http_error.error_type)
             handle_error(task, http_error)
           else
-            handle_success(task, response)
+            handle_completion(task, response)
           end
         rescue => e
-          task.completed!
           error_type = RequestError.error_type(e)
           @metrics.record_error(error_type)
           @stats.record_error(error_type)
@@ -420,13 +418,13 @@ module Sidekiq
       # @param task [RequestTask] the request task
       # @param response [Response] the response object
       # @return [void]
-      def handle_success(task, response)
+      def handle_completion(task, response)
         if stopped?
           @config.logger&.warn("[Sidekiq::AsyncHttp] Request #{task.id} succeeded after processor was stopped")
           return
         end
 
-        task.success!(response)
+        task.completed!(response)
 
         # Unregister from Redis after successful callback enqueue
         @inflight_registry.unregister(task.id)
