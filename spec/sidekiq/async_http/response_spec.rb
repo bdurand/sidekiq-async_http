@@ -349,6 +349,78 @@ RSpec.describe Sidekiq::AsyncHttp::Response do
     end
   end
 
+  describe "#json?" do
+    it "returns true for application/json Content-Type" do
+      response = described_class.new(
+        status: 200,
+        headers: {"Content-Type" => "application/json"},
+        body: "{}",
+        duration: 0.1,
+        request_id: "1",
+        url: "http://test.com",
+        http_method: :get
+      )
+
+      expect(response.json?).to be true
+    end
+
+    it "returns true for application/json with charset" do
+      response = described_class.new(
+        status: 200,
+        headers: {"Content-Type" => "application/json; charset=utf-8"},
+        body: "{}",
+        duration: 0.1,
+        request_id: "1",
+        url: "http://test.com",
+        http_method: :get
+      )
+
+      expect(response.json?).to be true
+    end
+
+    it "returns true for text/json Content-Type" do
+      response = described_class.new(
+        status: 200,
+        headers: {"Content-Type" => "text/json"},
+        body: "{}",
+        duration: 0.1,
+        request_id: "1",
+        url: "http://test.com",
+        http_method: :get
+      )
+
+      expect(response.json?).to be true
+    end
+
+    it "returns false for non-JSON Content-Type" do
+      response = described_class.new(
+        status: 200,
+        headers: {"Content-Type" => "text/html"},
+        body: "<html></html>",
+        duration: 0.1,
+        request_id: "1",
+        url: "http://test.com",
+        http_method: :get
+      )
+
+      expect(response.json?).to be false
+    end
+
+    it "returns false when Content-Type is missing" do
+      response = described_class.new(
+        status: 200,
+        headers: {},
+        body: "No Content-Type",
+        duration: 0.1,
+        request_id: "1",
+        url: "http://test.com",
+        http_method: :get
+      )
+
+      expect(response.json?).to be false
+    end
+  end
+
   describe "#json" do
     it "parses JSON body when Content-Type is application/json" do
       body = '{"name":"John","age":30}'

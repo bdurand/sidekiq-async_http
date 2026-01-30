@@ -135,14 +135,21 @@ module Sidekiq
         headers["content-type"]
       end
 
+      # Return true if Content-Type indicates JSON.
+      #
+      # @return [Boolean]
+      def json?
+        type = content_type.to_s.downcase
+        type.match?(%r{\Aapplication/[^ ]*json\b}) || type == "text/json"
+      end
+
       # Parse response body as JSON
       #
       # @return [Hash, Array] parsed JSON
       # @raise [RuntimeError] if Content-Type is not application/json
       # @raise [JSON::ParserError] if body is not valid JSON
       def json
-        type = content_type.to_s.downcase
-        unless type.match?(%r{\Aapplication/[^ ]*json\b}) || type == "text/json"
+        unless json?
           raise "Response Content-Type is not application/json (got: #{content_type.inspect})"
         end
 
