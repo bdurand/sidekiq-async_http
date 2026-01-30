@@ -242,7 +242,7 @@ module Sidekiq
 
       # Unregister a request from Redis (called when request completes).
       #
-      # @param request_id [String] the request ID to unregister
+      # @param task [RequestTask] the request task to unregister
       #
       # @return [void]
       def unregister(task)
