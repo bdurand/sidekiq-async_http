@@ -634,7 +634,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
 
     it "raises ResponseTooLargeError when content-length exceeds max" do
       # Create a body that is larger than max_response_size (1MB)
-      large_body = "x" * (1_048_577)  # Just over 1MB
+      large_body = "x" * 1_048_577  # Just over 1MB
       stub_request(:get, "https://api.example.com/users")
         .to_return(status: 200, body: large_body, headers: {})
 
@@ -665,7 +665,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
 
     it "handles ResponseTooLargeError correctly" do
       # Create a body that is larger than max_response_size (1MB)
-      large_body = "x" * (1_048_577)  # Just over 1MB
+      large_body = "x" * 1_048_577  # Just over 1MB
       stub_request(:get, "https://api.example.com/users")
         .to_return(status: 200, body: large_body, headers: {})
 
