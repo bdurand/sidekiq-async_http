@@ -111,3 +111,78 @@ RSpec.configure do |config|
     Sidekiq::AsyncHttp.stop if Sidekiq::AsyncHttp.running?
   end
 end
+
+# Test callback service that records all calls
+class TestCallback
+  @completion_calls = []
+  @error_calls = []
+  @mutex = Mutex.new
+
+  class << self
+    attr_reader :completion_calls, :error_calls
+
+    def reset_calls!
+      @mutex.synchronize do
+        @completion_calls = []
+        @error_calls = []
+      end
+    end
+
+    def record_completion(response)
+      @mutex.synchronize { @completion_calls << response }
+    end
+
+    def record_error(error)
+      @mutex.synchronize { @error_calls << error }
+    end
+  end
+
+  def on_complete(response)
+    self.class.record_completion(response)
+  end
+
+  def on_error(error)
+    self.class.record_error(error)
+  end
+end
+
+# Test worker that records all job calls
+class TestWorker
+  include Sidekiq::Job
+
+  @calls = []
+  @mutex = Mutex.new
+
+  class << self
+    attr_reader :calls
+
+    def reset_calls!
+      @mutex.synchronize { @calls = [] }
+    end
+
+    def record_call(*args)
+      @mutex.synchronize { @calls << args }
+    end
+  end
+
+  def perform(*args)
+    self.class.record_call(*args)
+  end
+end
+
+# Test worker with pre-configured HTTP client
+class TestWorkerWithClient
+  include Sidekiq::AsyncHttp::Job
+
+  async_http_client base_url: "https://example.org", headers: {"X-Custom-Header" => "Test"}
+
+  callback do
+    def on_complete(response)
+      TestCallback.record_completion(response)
+    end
+
+    def on_error(error)
+      TestCallback.record_error(error)
+    end
+  end
+end

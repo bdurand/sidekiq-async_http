@@ -6,10 +6,10 @@ module Sidekiq::AsyncHttp
   # Represents an async HTTP request that will be processed by the async processor.
   #
   # Created by Client#async_request and its convenience methods (async_get, async_post, etc.).
-  # Must call perform() with callback workers to enqueue the request for execution.
+  # Must call execute() with a callback service to enqueue the request for execution.
   #
-  # The request validates that it has a method and URL. The perform call validates
-  # the Sidekiq job hash and success worker are provided.
+  # The request validates that it has a method and URL. The execute call validates
+  # the Sidekiq job hash and callback service are provided.
   class Request
     # Valid HTTP methods
     VALID_METHODS = %i[get post put patch delete].freeze
@@ -31,6 +31,23 @@ module Sidekiq::AsyncHttp
 
     # @return [Integer, nil] Maximum number of redirects to follow (nil uses config default, 0 disables)
     attr_reader :max_redirects
+
+    class << self
+      # Reconstruct a Request from a hash
+      #
+      # @param hash [Hash] hash representation
+      # @return [Request] reconstructed request
+      def load(hash)
+        new(
+          hash["http_method"].to_sym,
+          hash["url"],
+          headers: hash["headers"],
+          body: hash["body"],
+          timeout: hash["timeout"],
+          max_redirects: hash["max_redirects"]
+        )
+      end
+    end
 
     # Initializes a new Request.
     #
@@ -58,51 +75,51 @@ module Sidekiq::AsyncHttp
     end
 
     # Execute the request. The request will be processed asynchronously. If the
-    # request gets a response from the server, the completion_worker will be called.
+    # request gets a response from the server, the callback's on_complete method will be called.
     # If an error occurs (network error, timeout, or non-2xx response if raise_error_responses
-    # is true), the error_worker will be called.
+    # is true), the callback's on_error method will be called.
     #
+    # @param callback [Class, String] Callback service class with on_complete and on_error
+    #   instance methods, or its fully qualified class name.
     # @param sidekiq_job [Hash, nil] Sidekiq job hash with "class" and "args" keys.
     #   If not provided, uses Sidekiq::AsyncHttp::Context.current_job.
     #   This requires the Sidekiq::AsyncHttp::Context::Middleware to be added
     #   to the Sidekiq server middleware chain. This is done by default if you require
     #   the "sidekiq/async_http/sidekiq" file.
-    # @param completion_worker [Class] Worker class (must include Sidekiq::Job) to call on successful response
-    # @param error_worker [Class] Worker class (must include Sidekiq::Job) to call on error.
     # @param synchronous [Boolean] If true, runs the request inline (for testing).
-    # @param callback_args [#to_h, nil] Arguments to pass to callback workers via the
+    # @param callback_args [#to_h, nil] Arguments to pass to callback via the
     #   Response/Error object. Must respond to to_h and contain only JSON-native types
     #   (nil, true, false, String, Integer, Float, Array, Hash). All hash keys (including
     #   nested hashes and hashes in arrays) will be deeply converted to strings for serialization.
     #   Access via response.callback_args or error.callback_args using symbol or string keys.
     # @param raise_error_responses [Boolean] If true, raises an HttpError for non-2xx responses
-    #   and calls the error_worker instead of completion_worker. Defaults to false.
-    #
+    #   and calls on_error instead of on_complete. Defaults to false.
+    # @param request_id [String, nil] @private Unique request ID for tracking. If nil, a new UUID will be generated.
     # @return [String] the request ID
     def execute(
-      completion_worker:,
-      error_worker:,
+      callback:,
       sidekiq_job: nil,
       synchronous: false,
       callback_args: nil,
-      raise_error_responses: false
+      raise_error_responses: false,
+      request_id: nil
     )
       sidekiq_job = validate_sidekiq_job(sidekiq_job)
-      validate_callback_workers!(completion_worker, error_worker)
+      validate_callback!(callback)
       validated_callback_args = validate_callback_args(callback_args)
 
       task = RequestTask.new(
         request: self,
         sidekiq_job: sidekiq_job,
-        completion_worker: completion_worker,
-        error_worker: error_worker,
+        callback: callback,
         callback_args: validated_callback_args,
-        raise_error_responses: raise_error_responses
+        raise_error_responses: raise_error_responses,
+        id: request_id
       )
 
       # Run the request inline if Sidekiq::Testing.inline! is enabled
       if synchronous || async_disabled?
-        InlineRequest.new(task).execute
+        SynchronousExecutor.new(task).call
         return task.id
       end
 
@@ -117,14 +134,41 @@ module Sidekiq::AsyncHttp
       task.id
     end
 
+    def async_execute(
+      callback:,
+      synchronous: false,
+      callback_args: nil,
+      raise_error_responses: false
+    )
+      validate_callback!(callback)
+      callback_name = callback.is_a?(Class) ? callback.name : callback.to_s
+      callback_args = validate_callback_args(callback_args)
+      request_id = SecureRandom.uuid
+
+      RequestWorker.perform_async(as_json, callback_name, raise_error_responses, callback_args, request_id)
+
+      request_id
+    end
+
+    def as_json
+      {
+        "http_method" => @http_method.to_s,
+        "url" => @url.to_s,
+        "headers" => @headers.to_h,
+        "body" => @body,
+        "timeout" => @timeout,
+        "max_redirects" => @max_redirects
+      }
+    end
+
+    alias_method :dump, :as_json
+
     private
 
     def validate_sidekiq_job(sidekiq_job)
       sidekiq_job ||= Sidekiq::AsyncHttp::Context.current_job
 
-      if sidekiq_job.nil?
-        raise ArgumentError.new("sidekiq_job is required (provide hash or ensure Sidekiq::AsyncHttp::Context.current_job is set)")
-      end
+      raise ArgumentError.new("sidekiq_job is required") if sidekiq_job.nil?
 
       raise ArgumentError.new("sidekiq_job must be a Hash, got: #{sidekiq_job.class}") unless sidekiq_job.is_a?(Hash)
 
@@ -135,13 +179,22 @@ module Sidekiq::AsyncHttp
       sidekiq_job
     end
 
-    def validate_callback_workers!(completion_worker, error_worker)
-      unless completion_worker.is_a?(Class) && completion_worker.include?(Sidekiq::Job)
-        raise ArgumentError.new("completion_worker must be a class that includes Sidekiq::Job")
+    def validate_callback!(callback)
+      callback_class = callback.is_a?(Class) ? callback : ClassHelper.resolve_class_name(callback)
+
+      validate_callback_method!(callback_class, :on_complete)
+      validate_callback_method!(callback_class, :on_error)
+    end
+
+    def validate_callback_method!(callback_class, method_name)
+      unless callback_class.method_defined?(method_name)
+        raise ArgumentError.new("callback class must define ##{method_name} instance method")
       end
 
-      unless error_worker.is_a?(Class) && error_worker.include?(Sidekiq::Job)
-        raise ArgumentError.new("error_worker must be a class that includes Sidekiq::Job")
+      method = callback_class.instance_method(method_name)
+      # arity of 1 = exactly 1 required arg, -1 = any args (*args), -2 = 1 required + splat
+      unless method.arity == 1 || method.arity == -1 || method.arity == -2
+        raise ArgumentError.new("callback class ##{method_name} must accept exactly 1 positional argument")
       end
     end
 

@@ -3,27 +3,6 @@
 require "spec_helper"
 
 RSpec.describe Sidekiq::AsyncHttp::Job do
-  let(:response_data) do
-    {
-      "status" => 200,
-      "headers" => {"Content-Type" => "application/json"},
-      "body" => {"encoding" => "text", "value" => '{"message":"success"}'},
-      "duration" => 0.123,
-      "request_id" => "req-123",
-      "url" => "https://api.example.com/users",
-      "method" => "get"
-    }
-  end
-
-  let(:error_data) do
-    {
-      "class_name" => "Timeout::Error",
-      "message" => "Request timed out",
-      "backtrace" => ["line 1", "line 2", "line 3"],
-      "error_type" => "timeout"
-    }
-  end
-
   describe "including Sidekiq::Job" do
     let(:worker_class) do
       Class.new do
@@ -36,71 +15,86 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
     end
   end
 
-  describe ".on_completion" do
+  describe ".callback" do
     let(:worker_class) do
       Class.new do
         include Sidekiq::AsyncHttp::Job
 
-        @called_args = []
+        callback do
+          def on_complete(response)
+            # Handle completion
+          end
 
-        on_completion(retry: false) do |response|
-          @called_args << [response]
+          def on_error(error)
+            # Handle error
+          end
         end
       end
     end
 
-    let(:called_args) { worker_class.instance_variable_get(:@called_args) }
-
-    it "sets the success callback worker class" do
-      expect(worker_class.completion_callback_worker).to eq(worker_class::CompletionCallback)
+    it "sets the callback_service_class" do
+      expect(worker_class.callback_service_class).to eq(worker_class::AsyncHttpCallback)
     end
 
-    it "defines a CompletionCallback worker class" do
-      completion_worker = worker_class::CompletionCallback
-      args = completion_worker.instance_method(:perform).parameters
-      expect(args).to eq([%i[req response]]) # single response arg
+    it "defines an AsyncHttpCallback class with required methods" do
+      callback_class = worker_class::AsyncHttpCallback
+      expect(callback_class.method_defined?(:on_complete)).to be true
+      expect(callback_class.method_defined?(:on_error)).to be true
     end
 
-    it "allows setting Sidekiq options" do
-      sidekiq_options = worker_class::CompletionCallback.get_sidekiq_options
-      expect(sidekiq_options["retry"]).to eq(false)
+    it "callback class has on_complete method" do
+      callback_class = worker_class::AsyncHttpCallback
+      callback = callback_class.new
+      expect(callback).to respond_to(:on_complete)
+    end
+
+    it "callback class has on_error method" do
+      callback_class = worker_class::AsyncHttpCallback
+      callback = callback_class.new
+      expect(callback).to respond_to(:on_error)
     end
   end
 
-  describe ".on_error" do
-    let(:worker_class) do
+  describe ".callback_service=" do
+    let(:external_callback) do
       Class.new do
-        include Sidekiq::AsyncHttp::Job
+        def on_complete(response)
+        end
 
-        @called_args = []
-
-        on_error(retry: false) do |error|
-          @called_args << [error]
+        def on_error(error)
         end
       end
     end
 
-    let(:called_args) { worker_class.instance_variable_get(:@called_args) }
+    let(:worker_class) do
+      callback = external_callback
+      Class.new do
+        include Sidekiq::AsyncHttp::Job
 
-    it "sets the error callback worker class" do
-      expect(worker_class.error_callback_worker).to eq(worker_class::ErrorCallback)
+        self.callback_service = callback
+      end
     end
 
-    it "defines an ErrorCallback worker class" do
-      error_worker = worker_class::ErrorCallback
-      args = error_worker.instance_method(:perform).parameters
-      expect(args).to eq([%i[req error]]) # single error arg
+    it "sets the callback_service_class to the external class" do
+      expect(worker_class.callback_service_class).to eq(external_callback)
     end
 
-    it "allows setting Sidekiq options" do
-      sidekiq_options = worker_class::ErrorCallback.get_sidekiq_options
-      expect(sidekiq_options["retry"]).to eq(false)
+    it "raises error if class does not have required methods" do
+      invalid_class = Class.new
+
+      expect do
+        Class.new do
+          include Sidekiq::AsyncHttp::Job
+
+          self.callback_service = invalid_class
+        end
+      end.to raise_error(ArgumentError, /must define #on_complete instance method/)
     end
   end
 
   describe ".async_http_client" do
     it "can setup HTTP request defaults at the class level" do
-      worker = TestWorkers::WorkerWithClient.new
+      worker = TestWorkerWithClient.new
       expect(worker.async_http_client.base_url).to eq("https://example.org")
       expect(worker.async_http_client.headers["X-Custom-Header"]).to eq("Test")
     end
@@ -111,14 +105,14 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
       Class.new do
         include Sidekiq::AsyncHttp::Job
 
-        @called_args = []
+        callback do
+          def on_complete(response)
+            TestCallback.record_completion(response)
+          end
 
-        on_completion do |response|
-          @called_args << [response]
-        end
-
-        on_error do |error|
-          @called_args << [error]
+          def on_error(error)
+            TestCallback.record_error(error)
+          end
         end
       end
     end
@@ -127,7 +121,7 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
 
     let(:sidekiq_job) do
       {
-        "class" => "TestWorkers::Worker",
+        "class" => "TestWorker",
         "jid" => "test-jid-789",
         "args" => ["param1", 456, "action"]
       }
@@ -143,6 +137,7 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
 
     before do
       Sidekiq::AsyncHttp.start
+      TestCallback.reset_calls!
 
       allow(Sidekiq::AsyncHttp.processor).to receive(:enqueue) do |task|
         request_tasks << task
@@ -164,51 +159,10 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
         expect(task.request.timeout).to eq(10)
       end
 
-      it "sets the success and error workers to the dynamically defined callback workers" do
+      it "uses the callback defined with the callback DSL" do
         worker_instance.async_request(:post, "https://api.example.com/data", body: "payload", timeout: 15)
         task = request_tasks.first
-        expect(task.completion_worker).to eq(worker_class::CompletionCallback)
-        expect(task.error_worker).to eq(worker_class::ErrorCallback)
-      end
-
-      context "when success and error workers are set directly" do
-        let(:worker_class) do
-          Class.new do
-            include Sidekiq::AsyncHttp::Job
-
-            @called_args = []
-
-            self.completion_callback_worker = TestWorkers::CompletionWorker
-            self.error_callback_worker = TestWorkers::ErrorWorker
-          end
-        end
-
-        it "can set the success worker class directly" do
-          worker_instance.async_request(:put, "https://api.example.com/data/1", json: {name: "test"}, timeout: 20)
-          task = request_tasks.first
-          expect(task.completion_worker).to eq(TestWorkers::CompletionWorker)
-        end
-
-        it "can set the error worker class directly" do
-          worker_instance.async_request(:delete, "https://api.example.com/data/1", timeout: 25)
-          task = request_tasks.first
-          expect(task.error_worker).to eq(TestWorkers::ErrorWorker)
-        end
-      end
-
-      it "can override success and error workers" do
-        worker_instance.async_request(
-          :put,
-          "https://api.example.com/data/1",
-          json: {name: "test"},
-          timeout: 20,
-          completion_worker: TestWorkers::CompletionWorker,
-          error_worker: TestWorkers::ErrorWorker
-        )
-
-        task = request_tasks.first
-        expect(task.completion_worker).to eq(TestWorkers::CompletionWorker)
-        expect(task.error_worker).to eq(TestWorkers::ErrorWorker)
+        expect(task.callback).to end_with("::AsyncHttpCallback")
       end
 
       it "passes callback_args to the request task" do
@@ -254,12 +208,45 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
           Sidekiq::AsyncHttp.configuration.raise_error_responses = original_config
         end
       end
+
+      it "allows passing a custom callback" do
+        worker_instance.async_request(
+          :get,
+          "https://api.example.com/data",
+          callback: TestCallback
+        )
+
+        task = request_tasks.first
+        expect(task.callback).to eq("TestCallback")
+      end
+
+      it "raises error if no callback is configured" do
+        no_callback_worker = Class.new do
+          include Sidekiq::AsyncHttp::Job
+        end
+
+        worker = no_callback_worker.new
+
+        expect do
+          Sidekiq::AsyncHttp::Context.with_job(sidekiq_job) do
+            worker.async_request(:get, "https://api.example.com/data")
+          end
+        end.to raise_error(ArgumentError, /No callback service configured/)
+      end
     end
 
     describe "#async_get" do
       it "calls async_request with GET method" do
         expect(worker_instance).to receive(:async_request).with(:get, "https://api.example.com/data", timeout: 5)
         worker_instance.async_get("https://api.example.com/data", timeout: 5)
+      end
+    end
+
+    describe "#async_get!" do
+      it "calls async_request with GET method and raise_error_responses: true" do
+        expect(worker_instance).to receive(:async_request).with(:get, "https://api.example.com/data",
+          raise_error_responses: true)
+        worker_instance.async_get!("https://api.example.com/data")
       end
     end
 
@@ -300,18 +287,12 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
       Class.new(ActiveJob::Base) do
         include Sidekiq::AsyncHttp::Job
 
-        @called_args = []
+        callback do
+          def on_complete(response)
+          end
 
-        on_completion do |response|
-          @called_args << [response]
-        end
-
-        on_error do |error|
-          @called_args << [error]
-        end
-
-        class << self
-          attr_reader :called_args
+          def on_error(error)
+          end
         end
       end
     end
@@ -353,7 +334,7 @@ RSpec.describe Sidekiq::AsyncHttp::Job do
 
     it "defaults callback_args to empty hash for ActiveJob" do
       sidekiq_job = {
-        "class" => "TestWorkers::ActiveJobWorker",
+        "class" => "TestActiveJobWorker",
         "jid" => "activejob-jid-123",
         "args" => [
           {

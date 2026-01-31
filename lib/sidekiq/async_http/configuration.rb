@@ -37,6 +37,9 @@ module Sidekiq
       # @return [Integer] Maximum number of redirects to follow (0 disables redirects)
       attr_reader :max_redirects
 
+      # @return [Hash, nil] Sidekiq options to apply to RequestWorker and CallbackWorker
+      attr_reader :sidekiq_options
+
       # Initializes a new Configuration with the specified options.
       #
       # @param max_connections [Integer] Maximum number of concurrent connections
@@ -50,6 +53,7 @@ module Sidekiq
       # @param user_agent [String, nil] Default User-Agent header value
       # @param raise_error_responses [Boolean] Whether to raise HttpError for non-2xx responses by default
       # @param max_redirects [Integer] Maximum number of redirects to follow (0 disables redirects)
+      # @param sidekiq_options [Hash, nil] Sidekiq options to apply to RequestWorker and CallbackWorker
       def initialize(
         max_connections: 256,
         idle_connection_timeout: 60,
@@ -61,7 +65,8 @@ module Sidekiq
         orphan_threshold: 300,
         user_agent: "Sidekiq-AsyncHttp",
         raise_error_responses: false,
-        max_redirects: 5
+        max_redirects: 5,
+        sidekiq_options: nil
       )
         self.max_connections = max_connections
         self.idle_connection_timeout = idle_connection_timeout
@@ -74,6 +79,7 @@ module Sidekiq
         self.user_agent = user_agent
         self.raise_error_responses = raise_error_responses
         self.max_redirects = max_redirects
+        self.sidekiq_options = sidekiq_options
       end
 
       # Get the logger to use (configured logger or Sidekiq.logger)
@@ -126,6 +132,20 @@ module Sidekiq
         @max_redirects = value
       end
 
+      def sidekiq_options=(options)
+        if options.nil?
+          @sidekiq_options = nil
+          return
+        end
+
+        unless options.is_a?(Hash)
+          raise ArgumentError.new("sidekiq_options must be a Hash, got: #{options.class}")
+        end
+
+        @sidekiq_options = options
+        apply_sidekiq_options(options)
+      end
+
       # Convert to hash for inspection
       # @return [Hash] hash representation with string keys
       def to_h
@@ -140,7 +160,8 @@ module Sidekiq
           "orphan_threshold" => orphan_threshold,
           "user_agent" => user_agent,
           "raise_error_responses" => raise_error_responses,
-          "max_redirects" => max_redirects
+          "max_redirects" => max_redirects,
+          "sidekiq_options" => sidekiq_options
         }
       end
 
@@ -164,6 +185,11 @@ module Sidekiq
         return unless @heartbeat_interval >= @orphan_threshold
 
         raise ArgumentError.new("heartbeat_interval (#{@heartbeat_interval}) must be less than orphan_threshold (#{@orphan_threshold})")
+      end
+
+      def apply_sidekiq_options(options)
+        Sidekiq::AsyncHttp::RequestWorker.sidekiq_options(options)
+        Sidekiq::AsyncHttp::CallbackWorker.sidekiq_options(options)
       end
     end
   end
