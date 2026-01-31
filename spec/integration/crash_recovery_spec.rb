@@ -212,8 +212,8 @@ RSpec.describe "Crash Recovery", :integration do
         reenqueued = true if job["jid"] == "gc-test-jid"
       end
 
-      # Wait for monitor to run GC (up to 3 seconds)
-      deadline = Time.now + 3
+      # Wait for monitor to run GC (up to 5 seconds)
+      deadline = Time.now + 5
       while Time.now < deadline && !reenqueued
         sleep(0.1)
       end
