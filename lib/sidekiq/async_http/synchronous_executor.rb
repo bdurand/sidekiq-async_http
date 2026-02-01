@@ -19,7 +19,7 @@ module Sidekiq::AsyncHttp
         start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
         begin
-          http_client = Async::HTTP::Internet.new(retries: 3)
+          http_client = create_http_client
           timeout = @task.request.timeout || @config.request_timeout
 
           response_data = Async::Task.current.with_timeout(timeout) do
@@ -27,7 +27,20 @@ module Sidekiq::AsyncHttp
             headers["user-agent"] ||= @config.user_agent if @config.user_agent
             body = Protocol::HTTP::Body::Buffered.wrap([@task.request.body.to_s]) if @task.request.body
 
-            async_response = http_client.call(@task.request.http_method, @task.request.url, headers, body)
+            # Make the request using the endpoint approach (consistent with ClientPool)
+            endpoint = Async::HTTP::Endpoint.parse(@task.request.url)
+            endpoint = configure_endpoint(endpoint) if @config.connection_timeout
+
+            verb = @task.request.http_method.to_s.upcase
+            options = {
+              headers: headers,
+              body: body,
+              scheme: endpoint.scheme,
+              authority: endpoint.authority
+            }
+
+            request = Protocol::HTTP::Request[verb, endpoint.path, **options]
+            async_response = http_client.call(request)
             headers_hash = async_response.headers.to_h.transform_values(&:to_s)
 
             # Read body
@@ -82,6 +95,51 @@ module Sidekiq::AsyncHttp
     end
 
     private
+
+    # Create HTTP client with config settings (retries, proxy, connection timeout).
+    #
+    # @return [Protocol::HTTP::AcceptEncoding] wrapped HTTP client
+    def create_http_client
+      endpoint = Async::HTTP::Endpoint.parse(@task.request.url)
+      endpoint = configure_endpoint(endpoint) if @config.connection_timeout
+
+      client = if @config.proxy_url
+        create_proxied_client(endpoint)
+      else
+        Async::HTTP::Client.new(endpoint, retries: @config.retries)
+      end
+
+      Protocol::HTTP::AcceptEncoding.new(client)
+    end
+
+    # Create a proxied HTTP client.
+    #
+    # @param endpoint [Async::HTTP::Endpoint] the target endpoint
+    # @return [Async::HTTP::Client] the proxied client
+    def create_proxied_client(endpoint)
+      require "async/http/proxy"
+
+      proxy_endpoint = Async::HTTP::Endpoint.parse(@config.proxy_url)
+      proxy_endpoint = configure_endpoint(proxy_endpoint) if @config.connection_timeout
+      proxy_client = Async::HTTP::Client.new(proxy_endpoint)
+
+      # Create a proxy instance for the target endpoint
+      proxy = proxy_client.proxy(endpoint)
+
+      # Return a client that routes through the proxy
+      Async::HTTP::Client.new(proxy.wrap_endpoint(endpoint), retries: @config.retries)
+    end
+
+    # Configure endpoint with connection timeout if specified.
+    #
+    # @param endpoint [Async::HTTP::Endpoint] the endpoint to configure
+    # @return [Async::HTTP::Endpoint] the configured endpoint
+    def configure_endpoint(endpoint)
+      Async::HTTP::Endpoint.new(
+        endpoint.url,
+        timeout: @config.connection_timeout
+      )
+    end
 
     # Read the response body with size validation.
     #

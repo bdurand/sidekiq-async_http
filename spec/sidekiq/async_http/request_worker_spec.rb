@@ -4,7 +4,7 @@ require "spec_helper"
 
 RSpec.describe Sidekiq::AsyncHttp::RequestWorker do
   describe ".perform" do
-    let(:sidedkiq_job) do
+    let(:sidekiq_job) do
       {
         "class" => "TestWorkers::Worker",
         "jid" => "test-jid",
@@ -23,7 +23,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestWorker do
 
     before do
       allow(Sidekiq::AsyncHttp).to receive(:processor).and_return(processor)
-      allow(Sidekiq::AsyncHttp::Context).to receive(:current_job).and_return(sidedkiq_job)
+      allow(Sidekiq::AsyncHttp::Context).to receive(:current_job).and_return(sidekiq_job)
     end
 
     it "processes the request and invokes the callback" do
