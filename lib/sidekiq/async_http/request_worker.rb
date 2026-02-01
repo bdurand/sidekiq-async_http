@@ -17,7 +17,7 @@ module Sidekiq::AsyncHttp
 
     # Perform the HTTP request.
     #
-    # @param request_data [Hash] Serialized request data with keys:
+    # @param request [Hash] Serialized request data with keys:
     #   - "http_method" [String] HTTP method (get, post, put, patch, delete)
     #   - "url" [String] The request URL
     #   - "headers" [Hash] Request headers
@@ -30,8 +30,8 @@ module Sidekiq::AsyncHttp
     # @param callback_args [Hash, nil] Arguments to pass to the callback
     # @param request_id [String, nil] Unique request ID for tracking
     # @return [void]
-    def perform(request_data, callback_service_name, raise_error_responses, callback_args, request_id)
-      request = Request.load(request_data)
+    def perform(request, callback_service_name, raise_error_responses, callback_args, request_id)
+      request = Request.load(request)
       sidekiq_job = Sidekiq::AsyncHttp::Context.current_job
 
       request.execute(

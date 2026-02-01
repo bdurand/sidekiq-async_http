@@ -171,14 +171,6 @@ module Sidekiq::AsyncHttp
     #
     # @return [void]
     def append_middleware
-      append_server_middleware
-    end
-
-    # Append server middleware required for exposing the current job context
-    # to RequestWorker.
-    #
-    # @return [void]
-    def append_server_middleware
       Sidekiq.configure_server do |config|
         config.server_middleware do |chain|
           chain.add Sidekiq::AsyncHttp::Context::Middleware

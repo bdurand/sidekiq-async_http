@@ -24,6 +24,7 @@ end
 Sidekiq::AsyncHttp.configure do |config|
   config.max_connections = AppConfig.max_connections
   config.proxy_url = ENV["HTTP_PROXY"]
+  config.sidekiq_options = {encrypted_args: [:result, :request]}
 end
 
 Sidekiq::AsyncHttp.after_completion do |response|

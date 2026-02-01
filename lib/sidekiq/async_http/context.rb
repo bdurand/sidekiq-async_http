@@ -36,8 +36,7 @@ module Sidekiq::AsyncHttp
       #
       # @return [Hash, nil] the current job hash or nil if no job context is set
       def current_job
-        job = @jobs[Thread.current.object_id]
-        deep_copy(job) if job
+        @jobs[Thread.current.object_id]
       end
 
       # Sets the current job context for the duration of the block.
@@ -56,12 +55,6 @@ module Sidekiq::AsyncHttp
         else
           @jobs.delete(thread_id)
         end
-      end
-
-      private
-
-      def deep_copy(obj)
-        Marshal.load(Marshal.dump(obj))
       end
     end
   end

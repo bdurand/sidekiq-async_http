@@ -308,11 +308,13 @@ Responses from asynchronous HTTP requests will be pushed to Redis in order to ca
 
 You can use the [sidekiq-encrypted_args](https://github.com/bdurand/sidekiq-encrypted_args) gem to encrypt the response data before it is stored in Redis.
 
-First, setup the encryption configuration in an initializer. You'll also need to append the `Sidekiq::AsyncHttp` middleware so that it comes after the decryption middleware inserted by calling `Sidekiq::EncryptedArgs.configure!`:
-
 ```ruby
 Sidekiq::EncryptedArgs.configure!(secret: "YourSecretKey")
-Sidekiq::AsyncHttp.append_middleware
+Sidekiq::AsyncHttp.configure do |config|
+  config.sidekiq_options = {
+    encrypted_args: [:result]
+  }
+end
 ```
 
 See the [sidekiq-encrypted_args documentation](https://github.com/bdurand/sidekiq-encrypted_args) for more details on configuring encryption.
