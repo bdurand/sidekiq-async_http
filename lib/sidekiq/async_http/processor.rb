@@ -400,9 +400,6 @@ module Sidekiq
         end
         @inflight_registry.unregister(task)
         @stats.record_request(task.response&.status, task.duration)
-
-        # Unstore the request after callback has been enqueued
-        task.request.unstore
       end
 
       # Handle successful response.

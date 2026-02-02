@@ -32,8 +32,6 @@ module Sidekiq::AsyncHttp
   #     end
   #   end
   class Request
-    include ExternalStorage
-
     # Valid HTTP methods
     VALID_METHODS = %i[get post put patch delete].freeze
 
@@ -196,14 +194,16 @@ module Sidekiq::AsyncHttp
       callback_args = validate_callback_args(callback_args)
       request_id = SecureRandom.uuid
 
-      RequestWorker.perform_async(as_json, callback_name, raise_error_responses, callback_args, request_id)
+      data = ExternalStorage.store(as_json)
+      RequestWorker.perform_async(data, callback_name, raise_error_responses, callback_args, request_id)
 
       request_id
     end
 
-    private
-
-    def original_as_json
+    # Serialize to JSON hash.
+    #
+    # @return [Hash]
+    def as_json
       {
         "http_method" => @http_method.to_s,
         "url" => @url.to_s,
@@ -213,6 +213,8 @@ module Sidekiq::AsyncHttp
         "max_redirects" => @max_redirects
       }
     end
+
+    private
 
     def validate_sidekiq_job(sidekiq_job)
       sidekiq_job ||= Sidekiq::AsyncHttp::Context.current_job

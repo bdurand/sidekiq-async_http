@@ -830,8 +830,9 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       job_args = job["args"]
       expect(job_args.size).to eq(3)
       expect(job_args[0]).to be_a(Hash)
-      expect(job_args[0]["status"]).to eq(200)
-      expect(job_args[0]["callback_args"]).to eq({"id" => 1, "arg" => "test_arg"})
+      response_data = job_args[0]
+      expect(response_data["status"]).to eq(200)
+      expect(response_data["callback_args"]).to eq({"id" => 1, "arg" => "test_arg"})
       expect(job_args[1]).to eq("response")
       expect(job_args[2]).to eq("TestCallback")
     end
@@ -884,7 +885,8 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       job_args = job["args"]
       expect(job_args.size).to eq(3)
       expect(job_args[0]).to be_a(Hash)
-      expect(job_args[0]["callback_args"]).to eq({"id" => 1, "arg" => "test_arg"})
+      error_data = job_args[0]
+      expect(error_data["callback_args"]).to eq({"id" => 1, "arg" => "test_arg"})
       expect(job_args[1]).to eq("error")
       expect(job_args[2]).to eq("TestCallback")
     end

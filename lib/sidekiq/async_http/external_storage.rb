@@ -2,162 +2,98 @@
 
 module Sidekiq
   module AsyncHttp
-    # Module for external storage of Request and Response payloads.
+    # Handles external storage of large payloads.
     #
-    # When included in a class, provides methods to store large payloads
-    # externally and serialize only a reference. This keeps Sidekiq job
-    # arguments small while supporting large request/response bodies.
+    # This class provides class methods for storing, fetching, and deleting
+    # payloads from external storage. It is decoupled from the models
+    # being stored (Request, Response, Error).
     #
-    # Including classes must define an +original_as_json+ method that returns
-    # the full serialization hash.
+    # @example Storing a large payload
+    #   data = response.as_json
+    #   stored_data = ExternalStorage.store(data)  # Returns reference if stored
     #
-    # @example Including in a class
-    #   class Response
-    #     include ExternalStorage
-    #
-    #     private
-    #
-    #     def original_as_json
-    #       { "status" => status, "body" => body, ... }
-    #     end
+    # @example Fetching and deleting
+    #   if ExternalStorage.storage_ref?(data)
+    #     original_data = ExternalStorage.fetch(data)
+    #     response = Response.load(original_data)
+    #     ExternalStorage.delete(data)
     #   end
-    module ExternalStorage
+    class ExternalStorage
       # Key used in serialized JSON to indicate an external storage reference
       REFERENCE_KEY = "$ref"
 
-      def self.included(base)
-        base.singleton_class.prepend(ClassMethods)
-      end
-
-      module ClassMethods
-        # Load an object from a hash, fetching from external storage if needed.
+      class << self
+        # Store a hash externally if it exceeds the configured threshold.
         #
-        # If the hash contains a +$ref+ key, the data is fetched from the
-        # referenced payload store and deserialized. Otherwise, the hash
-        # is deserialized directly.
+        # If no payload store is configured, or if the hash is below the
+        # threshold, the original hash is returned unchanged.
         #
-        # @param hash [Hash] Serialized data or reference
-        # @return [Object] The deserialized object
-        # @raise [RuntimeError] If the referenced store is not registered
-        # @raise [RuntimeError] If the stored data is not found
-        def load(hash)
-          if hash.is_a?(Hash) && hash.key?(REFERENCE_KEY)
-            ref = hash[REFERENCE_KEY]
-            store_name = ref["store"].to_sym
-            key = ref["key"]
+        # @param data [Hash] Hash to potentially store
+        # @return [Hash] Reference hash if stored, original hash if not
+        def store(data)
+          config = Sidekiq::AsyncHttp.configuration
+          store = config.payload_store
+          return data unless store
 
-            store = Sidekiq::AsyncHttp.configuration.payload_store(store_name)
-            unless store
-              raise "Payload store '#{store_name}' not registered"
-            end
+          json_size = data.to_json.bytesize
+          return data if json_size < config.payload_store_threshold
 
-            data = store.fetch(key)
-            unless data
-              raise "Stored payload not found: #{store_name}/#{key}"
-            end
+          key = store.generate_key
+          store.store(key, data)
 
-            instance = super(data)
-            instance.instance_variable_set(:@_store_name, store_name)
-            instance.instance_variable_set(:@_store_key, key)
-            instance
-          else
-            super(hash)
-          end
-        end
-      end
-
-      # Store the payload externally if configured and size exceeds threshold.
-      #
-      # Does nothing if:
-      # - Already stored
-      # - No payload store is configured
-      # - Payload size is below threshold
-      #
-      # @return [self]
-      def store
-        return self if stored?
-
-        config = Sidekiq::AsyncHttp.configuration
-        store = config.payload_store
-        return self unless store
-
-        json_data = original_as_json
-        json_size = json_data.to_json.bytesize
-        return self if json_size < config.payload_store_threshold
-
-        key = store.generate_key
-        store.store(key, json_data)
-        @_store_name = config.default_payload_store_name
-        @_store_key = key
-        self
-      end
-
-      # Check if this object is stored externally.
-      #
-      # @return [Boolean]
-      def stored?
-        !@_store_key.nil?
-      end
-
-      # Get the external storage key if stored.
-      #
-      # @return [String, nil]
-      def store_key
-        @_store_key
-      end
-
-      # Get the external storage store name if stored.
-      #
-      # @return [Symbol, nil]
-      def store_name
-        @_store_name
-      end
-
-      # Remove the payload from external storage.
-      #
-      # Idempotent - safe to call multiple times or if not stored.
-      #
-      # @return [void]
-      def unstore
-        return unless stored?
-
-        store = Sidekiq::AsyncHttp.configuration.payload_store(@_store_name)
-        store&.delete(@_store_key)
-        @_store_name = nil
-        @_store_key = nil
-      end
-
-      # Serialize to JSON hash.
-      #
-      # If stored externally, returns only a reference. Otherwise returns
-      # the full serialization.
-      #
-      # @return [Hash]
-      def as_json
-        if stored?
           {
             REFERENCE_KEY => {
-              "store" => @_store_name.to_s,
-              "key" => @_store_key
+              "store" => config.default_payload_store_name.to_s,
+              "key" => key
             }
           }
-        else
-          original_as_json
         end
-      end
 
-      # Alias dump to as_json for compatibility
-      alias_method :dump, :as_json
+        # Check if a hash is a storage reference.
+        #
+        # @param data [Hash, Object] Data to check
+        # @return [Boolean] true if this is a reference to external storage
+        def storage_ref?(data)
+          data.is_a?(Hash) && data.key?(REFERENCE_KEY)
+        end
 
-      private
+        # Fetch a hash from external storage.
+        #
+        # @param data [Hash] Reference hash containing storage location
+        # @return [Hash] Original hash from storage
+        # @raise [RuntimeError] If the store is not registered
+        # @raise [RuntimeError] If the stored payload is not found
+        def fetch(data)
+          ref = data[REFERENCE_KEY]
+          store_name = ref["store"].to_sym
+          key = ref["key"]
 
-      # Subclasses must implement this to provide the original serialization.
-      #
-      # @return [Hash] The full serialization hash
-      # @raise [NotImplementedError] If not implemented by including class
-      def original_as_json
-        raise NotImplementedError,
-          "#{self.class.name} must implement #original_as_json"
+          store = Sidekiq::AsyncHttp.configuration.payload_store(store_name)
+          raise "Payload store '#{store_name}' not registered" unless store
+
+          stored_data = store.fetch(key)
+          raise "Stored payload not found: #{store_name}/#{key}" unless stored_data
+
+          stored_data
+        end
+
+        # Delete payload from external storage.
+        #
+        # This method is idempotent - it's safe to call on non-reference hashes,
+        # already-deleted payloads, or nil values.
+        #
+        # @param data [Hash, nil] Reference hash (or regular hash, which is ignored)
+        # @return [void]
+        def delete(data)
+          return unless data && storage_ref?(data)
+
+          ref = data[REFERENCE_KEY]
+          store_name = ref["store"].to_sym
+          key = ref["key"]
+
+          store = Sidekiq::AsyncHttp.configuration.payload_store(store_name)
+          store&.delete(key)
+        end
       end
     end
   end

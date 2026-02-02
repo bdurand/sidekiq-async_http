@@ -248,10 +248,10 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       expect(Sidekiq::AsyncHttp::CallbackWorker.jobs.size).to eq(1)
       job = Sidekiq::AsyncHttp::CallbackWorker.jobs.first
       expect(job["args"].size).to eq(3)
-      response_json, result_type, callback_name = job["args"]
+      response_data, result_type, callback_name = job["args"]
       expect(result_type).to eq("response")
       expect(callback_name).to eq(callback)
-      expect(response_json["callback_args"]).to eq({"user_id" => 123, "action" => "fetch"})
+      expect(response_data["callback_args"]).to eq({"user_id" => 123, "action" => "fetch"})
       expect(task.duration).to be > 0
       expect(task.completed_at).not_to be_nil
     end
@@ -278,8 +278,8 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task.completed!(response)
       expect(Sidekiq::AsyncHttp::CallbackWorker.jobs.size).to eq(1)
       job = Sidekiq::AsyncHttp::CallbackWorker.jobs.first
-      response_json = job["args"].first
-      expect(response_json["callback_args"]).to eq({})
+      response_data = job["args"].first
+      expect(response_data["callback_args"]).to eq({})
     end
   end
 
@@ -304,10 +304,10 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       expect(Sidekiq::AsyncHttp::CallbackWorker.jobs.size).to eq(1)
       job = Sidekiq::AsyncHttp::CallbackWorker.jobs.first
       expect(job["args"].size).to eq(3)
-      error_json, result_type, callback_name = job["args"]
+      error_data, result_type, callback_name = job["args"]
       expect(result_type).to eq("error")
       expect(callback_name).to eq(callback)
-      expect(error_json["callback_args"]).to eq({"user_id" => 123, "action" => "fetch"})
+      expect(error_data["callback_args"]).to eq({"user_id" => 123, "action" => "fetch"})
       expect(task.duration).to be > 0
       expect(task.completed_at).not_to be_nil
     end
@@ -324,8 +324,8 @@ RSpec.describe Sidekiq::AsyncHttp::RequestTask do
       task.error!(exception)
       expect(Sidekiq::AsyncHttp::CallbackWorker.jobs.size).to eq(1)
       job = Sidekiq::AsyncHttp::CallbackWorker.jobs.first
-      error_json = job["args"].first
-      expect(error_json["callback_args"]).to eq({})
+      error_data = job["args"].first
+      expect(error_data["callback_args"]).to eq({})
     end
   end
 
