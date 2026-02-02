@@ -150,7 +150,8 @@ module Sidekiq::AsyncHttp
       @completed_at = monotonic_time
       @response = response
 
-      CallbackWorker.perform_async(response.as_json, "response", @callback)
+      data = ExternalStorage.store(response.as_json)
+      CallbackWorker.perform_async(data, "response", @callback)
     end
 
     # Called with the HTTP error on a failed request.
@@ -173,7 +174,8 @@ module Sidekiq::AsyncHttp
         )
       end
 
-      CallbackWorker.perform_async(wrapped_error.as_json, "error", @callback)
+      data = ExternalStorage.store(wrapped_error.as_json)
+      CallbackWorker.perform_async(data, "error", @callback)
     end
 
     # Return true if the task successfully received a response from the server.

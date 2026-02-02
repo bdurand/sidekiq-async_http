@@ -156,9 +156,9 @@ module Sidekiq
         JSON.parse(body)
       end
 
-      # Convert to hash with string keys for serialization
+      # Serialize to JSON hash.
       #
-      # @return [Hash] hash representation
+      # @return [Hash]
       def as_json
         {
           "status" => status,
@@ -172,8 +172,6 @@ module Sidekiq
           "redirects" => @redirects
         }
       end
-
-      alias_method :dump, :as_json
     end
   end
 end

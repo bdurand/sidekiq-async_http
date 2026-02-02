@@ -194,11 +194,15 @@ module Sidekiq::AsyncHttp
       callback_args = validate_callback_args(callback_args)
       request_id = SecureRandom.uuid
 
-      RequestWorker.perform_async(as_json, callback_name, raise_error_responses, callback_args, request_id)
+      data = ExternalStorage.store(as_json)
+      RequestWorker.perform_async(data, callback_name, raise_error_responses, callback_args, request_id)
 
       request_id
     end
 
+    # Serialize to JSON hash.
+    #
+    # @return [Hash]
     def as_json
       {
         "http_method" => @http_method.to_s,
@@ -209,8 +213,6 @@ module Sidekiq::AsyncHttp
         "max_redirects" => @max_redirects
       }
     end
-
-    alias_method :dump, :as_json
 
     private
 

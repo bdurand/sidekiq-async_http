@@ -17,7 +17,7 @@ module Sidekiq::AsyncHttp
 
     # Perform the HTTP request.
     #
-    # @param request [Hash] Serialized request data with keys:
+    # @param data [Hash] Request data (possibly a storage reference) with keys:
     #   - "http_method" [String] HTTP method (get, post, put, patch, delete)
     #   - "url" [String] The request URL
     #   - "headers" [Hash] Request headers
@@ -30,17 +30,25 @@ module Sidekiq::AsyncHttp
     # @param callback_args [Hash, nil] Arguments to pass to the callback
     # @param request_id [String, nil] Unique request ID for tracking
     # @return [void]
-    def perform(request, callback_service_name, raise_error_responses, callback_args, request_id)
-      request = Request.load(request)
+    def perform(data, callback_service_name, raise_error_responses, callback_args, request_id)
+      # Fetch from external storage if needed
+      ref_data = ExternalStorage.storage_ref?(data) ? data : nil
+      actual_data = ref_data ? ExternalStorage.fetch(data) : data
+
+      request = Request.load(actual_data)
       sidekiq_job = Sidekiq::AsyncHttp::Context.current_job
 
-      request.execute(
-        callback: callback_service_name,
-        raise_error_responses: raise_error_responses,
-        callback_args: callback_args,
-        sidekiq_job: sidekiq_job,
-        request_id: request_id
-      )
+      begin
+        request.execute(
+          callback: callback_service_name,
+          raise_error_responses: raise_error_responses,
+          callback_args: callback_args,
+          sidekiq_job: sidekiq_job,
+          request_id: request_id
+        )
+      ensure
+        ExternalStorage.delete(ref_data) if ref_data
+      end
     end
   end
 end
