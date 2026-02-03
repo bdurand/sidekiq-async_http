@@ -212,7 +212,7 @@ module Sidekiq
 
       # Update heartbeat timestamps for multiple requests in a single operation.
       #
-      # @param request_ids [Array<String>] the request IDs to update
+      # @param task_ids [Array<String>] the request IDs to update
       #
       # @return [void]
       def update_heartbeats(task_ids)
@@ -266,7 +266,7 @@ module Sidekiq
 
       # Build unique task ID for a request task that includes process identifier.
       #
-      # @param task [RequestTask] the request task
+      # @param task_id [String] the request task
       # @return [String] the unique task ID
       def full_task_id(task_id)
         "#{@lock_identifier}/#{task_id}"

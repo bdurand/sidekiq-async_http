@@ -209,11 +209,6 @@ module Sidekiq
       # @param request [Request] the HTTP request to execute
       # @param callback [Class, String] Callback service class with +on_complete+ and +on_error+
       #   instance methods, or its fully qualified class name.
-      # @param sidekiq_job [Hash, nil] Sidekiq job hash with "class" and "args" keys.
-      #   If not provided, uses Sidekiq::AsyncHttp::Context.current_job.
-      #   This requires the Sidekiq::AsyncHttp::Context::Middleware to be added
-      #   to the Sidekiq server middleware chain.
-      # @param synchronous [Boolean] If true, runs the request inline (for testing).
       # @param callback_args [#to_h, nil] Arguments to pass to callback via the
       #   Response/Error object. Must respond to +to_h+ and contain only JSON-native types
       #   (nil, true, false, String, Integer, Float, Array, Hash). All hash keys will be

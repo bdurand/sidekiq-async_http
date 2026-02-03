@@ -110,8 +110,6 @@ module Sidekiq
 
       # Update heartbeats for all inflight requests.
       #
-      # @param request_ids [Array<String>] the request IDs to update heartbeats for
-      #
       # @return [void]
       def update_heartbeats
         request_ids = @inflight_ids_callback.call
