@@ -15,10 +15,11 @@ RSpec.describe Sidekiq::AsyncHttp::TaskMonitor do
       "args" => [1, 2, 3]
     }
   end
+  let(:task_handler) { Sidekiq::AsyncHttp::SidekiqTaskHandler.new(sidekiq_job) }
   let(:task) do
     Sidekiq::AsyncHttp::RequestTask.new(
       request: request,
-      sidekiq_job: sidekiq_job,
+      task_handler: task_handler,
       callback: TestCallback
     )
   end
@@ -64,9 +65,10 @@ RSpec.describe Sidekiq::AsyncHttp::TaskMonitor do
 
   describe "#update_heartbeats" do
     let(:task2) do
+      handler2 = Sidekiq::AsyncHttp::SidekiqTaskHandler.new(sidekiq_job.merge("jid" => "test-jid-456"))
       Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: sidekiq_job.merge("jid" => "test-jid-456"),
+        task_handler: handler2,
         callback: TestCallback
       )
     end
@@ -208,15 +210,17 @@ RSpec.describe Sidekiq::AsyncHttp::TaskMonitor do
     end
 
     it "handles multiple orphaned requests" do
+      handler2 = Sidekiq::AsyncHttp::SidekiqTaskHandler.new(sidekiq_job.merge("jid" => "test-jid-456"))
       task2 = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: sidekiq_job.merge("jid" => "test-jid-456"),
+        task_handler: handler2,
         callback: TestCallback
       )
 
+      handler3 = Sidekiq::AsyncHttp::SidekiqTaskHandler.new(sidekiq_job.merge("jid" => "test-jid-789"))
       task3 = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: sidekiq_job.merge("jid" => "test-jid-789"),
+        task_handler: handler3,
         callback: TestCallback
       )
 
@@ -237,9 +241,10 @@ RSpec.describe Sidekiq::AsyncHttp::TaskMonitor do
     end
 
     it "handles errors when re-enqueuing and continues with other requests" do
+      handler2 = Sidekiq::AsyncHttp::SidekiqTaskHandler.new(sidekiq_job.merge("jid" => "test-jid-456"))
       task2 = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: sidekiq_job.merge("jid" => "test-jid-456"),
+        task_handler: handler2,
         callback: TestCallback
       )
 
@@ -362,9 +367,10 @@ RSpec.describe Sidekiq::AsyncHttp::TaskMonitor do
       registry.register(task)
       expect(described_class.inflight_count).to eq(1)
 
+      handler2 = Sidekiq::AsyncHttp::SidekiqTaskHandler.new(sidekiq_job.merge("jid" => "test-jid-456"))
       task2 = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: sidekiq_job.merge("jid" => "test-jid-456"),
+        task_handler: handler2,
         callback: TestCallback
       )
       registry.register(task2)
@@ -426,9 +432,10 @@ RSpec.describe Sidekiq::AsyncHttp::TaskMonitor do
     it "returns task IDs for this registry only" do
       registry.register(task)
 
+      handler2 = Sidekiq::AsyncHttp::SidekiqTaskHandler.new(sidekiq_job.merge("jid" => "test-jid-456"))
       task2 = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: sidekiq_job.merge("jid" => "test-jid-456"),
+        task_handler: handler2,
         callback: TestCallback
       )
       registry.register(task2)
@@ -443,9 +450,10 @@ RSpec.describe Sidekiq::AsyncHttp::TaskMonitor do
       registry.register(task)
 
       other_registry = described_class.new(config)
+      other_handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new(sidekiq_job.merge("jid" => "other-jid"))
       other_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: sidekiq_job.merge("jid" => "other-jid"),
+        task_handler: other_handler,
         callback: TestCallback
       )
       other_registry.register(other_task)

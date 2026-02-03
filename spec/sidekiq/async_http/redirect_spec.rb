@@ -15,6 +15,7 @@ RSpec.describe "Redirect handling" do
       "queue" => "default"
     }
   end
+  let(:task_handler) { Sidekiq::AsyncHttp::SidekiqTaskHandler.new(sidekiq_job) }
 
   describe "redirect status codes" do
     describe "followable redirects" do
@@ -22,7 +23,7 @@ RSpec.describe "Redirect handling" do
         it "follows #{status} redirects" do
           task = Sidekiq::AsyncHttp::RequestTask.new(
             request: request,
-            sidekiq_job: sidekiq_job,
+            task_handler: task_handler,
             callback: TestCallback
           )
 
@@ -42,7 +43,7 @@ RSpec.describe "Redirect handling" do
         it "does not follow #{status} status" do
           task = Sidekiq::AsyncHttp::RequestTask.new(
             request: request,
-            sidekiq_job: sidekiq_job,
+            task_handler: task_handler,
             callback: TestCallback
           )
 
@@ -62,7 +63,7 @@ RSpec.describe "Redirect handling" do
     it "does not follow redirect without Location header" do
       task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: sidekiq_job,
+        task_handler: task_handler,
         callback: TestCallback
       )
 
@@ -78,7 +79,7 @@ RSpec.describe "Redirect handling" do
     it "does not follow redirect with empty Location header" do
       task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: sidekiq_job,
+        task_handler: task_handler,
         callback: TestCallback
       )
 
@@ -97,7 +98,7 @@ RSpec.describe "Redirect handling" do
       request_no_redirects = Sidekiq::AsyncHttp::Request.new(:get, "https://example.com/start", max_redirects: 0)
       task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request_no_redirects,
-        sidekiq_job: sidekiq_job,
+        task_handler: task_handler,
         callback: TestCallback
       )
 

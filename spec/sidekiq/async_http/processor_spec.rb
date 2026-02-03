@@ -26,9 +26,11 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       body: body,
       timeout: timeout
     )
+    sidekiq_job = {"class" => worker_class, "jid" => jid || SecureRandom.uuid, "args" => job_args}
+    task_handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new(sidekiq_job)
     Sidekiq::AsyncHttp::RequestTask.new(
       request: request,
-      sidekiq_job: {"class" => worker_class, "jid" => jid || SecureRandom.uuid, "args" => job_args},
+      task_handler: task_handler,
       callback: callback,
       callback_args: callback_args
     )
@@ -1101,9 +1103,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       processor_with_logger.start
 
       # Enqueue a request
-      request = create_request_task(
-        jid: "jid-log"
-      )
+      request = create_request_task
       processor_with_logger.enqueue(request)
 
       # Wait for request to start processing
@@ -1113,7 +1113,7 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       processor_with_logger.stop(timeout: 0.001)
 
       # Check log output
-      expect(log_output.string).to match(/\[Sidekiq::AsyncHttp\] Re-enqueued incomplete request #{Regexp.escape(request.id)} to TestWorker/)
+      expect(log_output.string).to match(/\[Sidekiq::AsyncHttp\] Retrying incomplete request #{Regexp.escape(request.id)}/)
     end
 
     it "handles errors during re-enqueue gracefully", :disable_testing_mode do
@@ -1257,9 +1257,10 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
 
       # Use max_redirects of 3
       request = Sidekiq::AsyncHttp::Request.new(:get, "https://api.example.com/1", max_redirects: 3)
+      handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new({"class" => "TestWorker", "jid" => SecureRandom.uuid, "args" => []})
       task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: {"class" => "TestWorker", "jid" => SecureRandom.uuid, "args" => []},
+        task_handler: handler,
         callback: TestCallback
       )
       processor.enqueue(task)
@@ -1299,9 +1300,10 @@ RSpec.describe Sidekiq::AsyncHttp::Processor do
       processor.start
 
       request = Sidekiq::AsyncHttp::Request.new(:get, "https://api.example.com/old", max_redirects: 0)
+      handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new({"class" => "TestWorker", "jid" => SecureRandom.uuid, "args" => []})
       task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: {"class" => "TestWorker", "jid" => SecureRandom.uuid, "args" => []},
+        task_handler: handler,
         callback: TestCallback
       )
       processor.enqueue(task)

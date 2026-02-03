@@ -98,12 +98,12 @@ module Sidekiq
         # Re-enqueue each incomplete task
         tasks_to_reenqueue.each do |task|
           # Re-enqueue the original job
-          task.reenqueue_job
+          task.retry
           notify_observers { |observer| observer.request_end(task) }
 
           # Log re-enqueue
           @config.logger&.info(
-            "[Sidekiq::AsyncHttp] Re-enqueued incomplete request #{task.id} to #{task.job_worker_class.name}"
+            "[Sidekiq::AsyncHttp] Retrying incomplete request #{task.id}"
           )
         rescue => e
           @config.logger&.error(

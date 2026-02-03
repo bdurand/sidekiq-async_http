@@ -37,9 +37,10 @@ RSpec.describe "Error Handling Integration", :integration do
       template = Sidekiq::AsyncHttp::RequestTemplate.new(base_url: test_web_server.base_url, timeout: 0.1)
       request = template.get("/delay/5000")
 
+      handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new({"class" => "TestWorker", "jid" => "timeout-test", "args" => []})
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: {"class" => "TestWorker", "jid" => "timeout-test", "args" => []},
+        task_handler: handler,
         callback: TestCallback,
         callback_args: {"arg" => "timeout_arg"}
       )
@@ -68,9 +69,10 @@ RSpec.describe "Error Handling Integration", :integration do
       template = Sidekiq::AsyncHttp::RequestTemplate.new(base_url: "http://127.0.0.1:1")
       request = template.get("/nowhere")
 
+      handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new({"class" => "TestWorker", "jid" => "conn-test", "args" => []})
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: {"class" => "TestWorker", "jid" => "conn-test", "args" => []},
+        task_handler: handler,
         callback: TestCallback,
         callback_args: {"arg" => "connection_arg"}
       )
@@ -99,9 +101,10 @@ RSpec.describe "Error Handling Integration", :integration do
       template = Sidekiq::AsyncHttp::RequestTemplate.new(base_url: test_web_server.base_url)
       request = template.get("/test/404")
 
+      handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new({"class" => "TestWorker", "jid" => "404-test", "args" => []})
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: {"class" => "TestWorker", "jid" => "404-test", "args" => []},
+        task_handler: handler,
         callback: TestCallback,
         callback_args: {"status" => "missing"}
       )
@@ -126,9 +129,10 @@ RSpec.describe "Error Handling Integration", :integration do
       template = Sidekiq::AsyncHttp::RequestTemplate.new(base_url: test_web_server.base_url)
       request = template.get("/test/503")
 
+      handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new({"class" => "TestWorker", "jid" => "503-test", "args" => []})
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: {"class" => "TestWorker", "jid" => "503-test", "args" => []},
+        task_handler: handler,
         callback: TestCallback,
         callback_args: {"status" => "unavailable"}
       )
@@ -153,9 +157,10 @@ RSpec.describe "Error Handling Integration", :integration do
       template = Sidekiq::AsyncHttp::RequestTemplate.new(base_url: test_web_server.base_url)
       request = template.get("/test/404")
 
+      handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new({"class" => "TestWorker", "jid" => "404-error-test", "args" => []})
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: {"class" => "TestWorker", "jid" => "404-error-test", "args" => []},
+        task_handler: handler,
         callback: TestCallback,
         callback_args: {"status" => "missing"},
         raise_error_responses: true

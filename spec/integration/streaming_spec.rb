@@ -42,13 +42,14 @@ RSpec.describe "Streaming Response Integration", :integration do
     3.times do |i|
       request = template.get("/delay/500")
 
+      handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new({
+        "class" => "TestWorker",
+        "jid" => "jid-#{i}",
+        "args" => [i]
+      })
       task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: {
-          "class" => "TestWorker",
-          "jid" => "jid-#{i}",
-          "args" => [i]
-        },
+        task_handler: handler,
         callback: TestCallback
       )
 
