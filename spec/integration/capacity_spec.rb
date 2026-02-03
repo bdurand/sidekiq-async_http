@@ -44,26 +44,28 @@ RSpec.describe "Capacity Limit Integration", :integration do
 
       # Enqueue first long-running request
       request1 = template.get("/delay/250")
+      handler1 = Sidekiq::AsyncHttp::SidekiqTaskHandler.new({
+        "class" => "Worker",
+        "jid" => "jid-1",
+        "args" => ["arg1"]
+      })
       request_task1 = Sidekiq::AsyncHttp::RequestTask.new(
         request: request1,
-        sidekiq_job: {
-          "class" => "Worker",
-          "jid" => "jid-1",
-          "args" => ["arg1"]
-        },
+        task_handler: handler1,
         callback: TestCallback
       )
       processor.enqueue(request_task1)
 
       # Enqueue second long-running request
       request2 = template.get("/delay/250")
+      handler2 = Sidekiq::AsyncHttp::SidekiqTaskHandler.new({
+        "class" => "Worker",
+        "jid" => "jid-2",
+        "args" => ["arg2"]
+      })
       request_task2 = Sidekiq::AsyncHttp::RequestTask.new(
         request: request2,
-        sidekiq_job: {
-          "class" => "Worker",
-          "jid" => "jid-2",
-          "args" => ["arg2"]
-        },
+        task_handler: handler2,
         callback: TestCallback
       )
       processor.enqueue(request_task2)
@@ -73,13 +75,14 @@ RSpec.describe "Capacity Limit Integration", :integration do
 
       # Attempt to enqueue third request - should raise error
       request3 = template.get("/delay/100")
+      handler3 = Sidekiq::AsyncHttp::SidekiqTaskHandler.new({
+        "class" => "Worker",
+        "jid" => "jid-3",
+        "args" => ["arg3"]
+      })
       request_task3 = Sidekiq::AsyncHttp::RequestTask.new(
         request: request3,
-        sidekiq_job: {
-          "class" => "Worker",
-          "jid" => "jid-3",
-          "args" => ["arg3"]
-        },
+        task_handler: handler3,
         callback: TestCallback
       )
 

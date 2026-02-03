@@ -55,10 +55,11 @@ RSpec.describe "Processor Shutdown Integration", :integration do
         "jid" => "test-jid-clean",
         "args" => []
       }
+      task_handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new(sidekiq_job)
 
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: sidekiq_job,
+        task_handler: task_handler,
         callback: TestCallback,
         callback_args: {arg1: "arg1", arg2: "arg2"}
       )
@@ -106,10 +107,11 @@ RSpec.describe "Processor Shutdown Integration", :integration do
         "jid" => "test-jid-forced",
         "args" => %w[original_arg1 original_arg2]
       }
+      task_handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new(sidekiq_job)
 
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: sidekiq_job,
+        task_handler: task_handler,
         callback: TestCallback
       )
 
@@ -158,10 +160,11 @@ RSpec.describe "Processor Shutdown Integration", :integration do
           "jid" => "test-jid-#{i + 1}",
           "args" => ["request_#{i + 1}"]
         }
+        task_handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new(sidekiq_job)
 
         request_task = Sidekiq::AsyncHttp::RequestTask.new(
           request: request,
-          sidekiq_job: sidekiq_job,
+          task_handler: task_handler,
           callback: TestCallback,
           callback_args: {request_name: "request_#{i + 1}"}
         )

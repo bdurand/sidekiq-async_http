@@ -40,10 +40,11 @@ RSpec.describe "Crash Recovery", :integration do
     }
 
     request = Sidekiq::AsyncHttp::Request.new(:get, "http://localhost:9876/test")
+    task_handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new(job_payload)
 
     task = Sidekiq::AsyncHttp::RequestTask.new(
       request: request,
-      sidekiq_job: job_payload,
+      task_handler: task_handler,
       callback: TestCallback
     )
 
@@ -86,10 +87,11 @@ RSpec.describe "Crash Recovery", :integration do
     }
 
     request = Sidekiq::AsyncHttp::Request.new(:get, "http://localhost:9876/test")
+    task_handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new(job_payload)
 
     task = Sidekiq::AsyncHttp::RequestTask.new(
       request: request,
-      sidekiq_job: job_payload,
+      task_handler: task_handler,
       callback: TestCallback
     )
 
@@ -149,10 +151,11 @@ RSpec.describe "Crash Recovery", :integration do
     }
 
     request = Sidekiq::AsyncHttp::Request.new(:get, "http://localhost:9876/test")
+    task_handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new(job_payload)
 
     task = Sidekiq::AsyncHttp::RequestTask.new(
       request: request,
-      sidekiq_job: job_payload,
+      task_handler: task_handler,
       callback: TestCallback
     )
 

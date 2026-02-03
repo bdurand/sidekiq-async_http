@@ -44,10 +44,11 @@ module Sidekiq
           request_id: nil
         )
           sidekiq_job = validate_sidekiq_job(sidekiq_job)
+          task_handler = SidekiqTaskHandler.new(sidekiq_job)
 
           task = RequestTask.new(
             request: request,
-            sidekiq_job: sidekiq_job,
+            task_handler: task_handler,
             callback: callback,
             callback_args: callback_args,
             raise_error_responses: raise_error_responses,

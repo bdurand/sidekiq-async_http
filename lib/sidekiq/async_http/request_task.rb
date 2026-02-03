@@ -14,8 +14,8 @@ module Sidekiq
       # @return [Request] The HTTP request details
       attr_reader :request
 
-      # @return [Hash] The Sidekiq job hash containing class, jid, args, etc.
-      attr_reader :sidekiq_job
+      # @return [TaskHandler] The handler for job lifecycle operations
+      attr_reader :task_handler
 
       # @return [String] Class name for the callback service
       attr_reader :callback
@@ -35,7 +35,7 @@ module Sidekiq
       # Initializes a new RequestTask.
       #
       # @param request [Request] The HTTP request to wrap.
-      # @param sidekiq_job [Hash] The Sidekiq job hash.
+      # @param task_handler [TaskHandler] The handler for job lifecycle operations.
       # @param callback [String, Class] Class name or class for the callback service.
       # @param callback_args [Hash] Callback arguments (with string keys) to include
       #   in Response/Error objects. These will be accessible via response.callback_args
@@ -45,7 +45,7 @@ module Sidekiq
       # @param id [String, nil] Unique UUID for tracking the task. If nil, a new UUID will be generated.
       def initialize(
         request:,
-        sidekiq_job:,
+        task_handler:,
         callback:,
         callback_args: {},
         raise_error_responses: false,
@@ -54,7 +54,7 @@ module Sidekiq
       )
         @id = id || SecureRandom.uuid
         @request = request
-        @sidekiq_job = sidekiq_job
+        @task_handler = task_handler
         @callback = callback.is_a?(Class) ? callback.name : callback.to_s
         @callback_args = CallbackValidator.validate_callback_args(callback_args) || {}
         @raise_error_responses = raise_error_responses
@@ -67,7 +67,7 @@ module Sidekiq
         @error = nil
 
         raise ArgumentError, "request is required" unless @request
-        raise ArgumentError, "sidekiq_job is required" unless @sidekiq_job
+        raise ArgumentError, "task_handler is required" unless @task_handler
         raise ArgumentError, "callback is required" if @callback.nil? || @callback.empty?
         CallbackValidator.validate!(@callback)
       end
@@ -121,22 +121,10 @@ module Sidekiq
         ((@completed_at || monotonic_time) - @started_at).round(9)
       end
 
-      # Get the worker class name from the Sidekiq job
-      # @return [String] worker class name
-      def job_worker_class
-        ClassHelper.resolve_class_name(@sidekiq_job["class"])
-      end
-
-      # Get the job ID from the Sidekiq job.
+      # Re-enqueue the original job via the task handler.
       # @return [String] job ID
-      def jid
-        @sidekiq_job["jid"]
-      end
-
-      # Re-enqueue the original Sidekiq job
-      # @return [String] job ID
-      def reenqueue_job
-        Sidekiq::Client.push(@sidekiq_job)
+      def retry
+        @task_handler.retry
       end
 
       # Called with the HTTP response on a completed request. Note that
@@ -152,8 +140,7 @@ module Sidekiq
         @completed_at = monotonic_time
         @response = response
 
-        data = ExternalStorage.store(response.as_json)
-        CallbackWorker.perform_async(data, "response", @callback)
+        @task_handler.on_complete(response, @callback)
       end
 
       # Called with the HTTP error on a failed request.
@@ -176,8 +163,7 @@ module Sidekiq
           )
         end
 
-        data = ExternalStorage.store(wrapped_error.as_json)
-        CallbackWorker.perform_async(data, "error", @callback)
+        @task_handler.on_error(wrapped_error, @callback)
       end
 
       # Return true if the task successfully received a response from the server.
@@ -238,7 +224,7 @@ module Sidekiq
         # Create the new task with updated redirects chain
         self.class.new(
           request: redirect_request,
-          sidekiq_job: @sidekiq_job,
+          task_handler: @task_handler,
           callback: @callback,
           callback_args: @callback_args,
           raise_error_responses: @raise_error_responses,

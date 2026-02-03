@@ -33,7 +33,7 @@ RSpec.describe Sidekiq::AsyncHttp::RequestExecutor do
         expect(processor).to receive(:enqueue) do |task|
           expect(task).to be_a(Sidekiq::AsyncHttp::RequestTask)
           expect(task.request).to eq(request)
-          expect(task.sidekiq_job).to eq(job_hash)
+          expect(task.task_handler.sidekiq_job).to eq(job_hash)
           expect(task.callback).to eq("TestCallback")
         end
 

@@ -50,10 +50,11 @@ RSpec.describe "Full Workflow Integration", :integration do
         "jid" => "test-jid-123",
         "args" => []
       }
+      task_handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new(sidekiq_job)
 
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: sidekiq_job,
+        task_handler: task_handler,
         callback: TestCallback,
         callback_args: {webhook_id: "webhook_id", index: 1}
       )
@@ -110,10 +111,11 @@ RSpec.describe "Full Workflow Integration", :integration do
         "jid" => "test-jid-456",
         "args" => []
       }
+      task_handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new(sidekiq_job)
 
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: sidekiq_job,
+        task_handler: task_handler,
         callback: TestCallback,
         callback_args: {resource: "user", id: 123, action: "fetch"}
       )
@@ -148,13 +150,14 @@ RSpec.describe "Full Workflow Integration", :integration do
       # Enqueue 3 requests with different status codes
       [200, 201, 202].each_with_index do |status, i|
         request = template.get("/test/#{status}")
+        handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new({
+          "class" => "TestWorker",
+          "jid" => "jid-#{i}",
+          "args" => [i]
+        })
         request_task = Sidekiq::AsyncHttp::RequestTask.new(
           request: request,
-          sidekiq_job: {
-            "class" => "TestWorker",
-            "jid" => "jid-#{i}",
-            "args" => [i]
-          },
+          task_handler: handler,
           callback: TestCallback
         )
         processor.enqueue(request_task)
@@ -189,9 +192,10 @@ RSpec.describe "Full Workflow Integration", :integration do
         }
       )
 
+      handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new({"class" => "TestWorker", "jid" => "jid", "args" => []})
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: {"class" => "TestWorker", "jid" => "jid", "args" => []},
+        task_handler: handler,
         callback: TestCallback
       )
 
@@ -220,9 +224,10 @@ RSpec.describe "Full Workflow Integration", :integration do
       # Make a request
       template = Sidekiq::AsyncHttp::RequestTemplate.new(base_url: test_web_server.base_url)
       request = template.get("/test/200")
+      handler = Sidekiq::AsyncHttp::SidekiqTaskHandler.new({"class" => "TestWorker", "jid" => "jid", "args" => []})
       request_task = Sidekiq::AsyncHttp::RequestTask.new(
         request: request,
-        sidekiq_job: {"class" => "TestWorker", "jid" => "jid", "args" => []},
+        task_handler: handler,
         callback: TestCallback
       )
 
