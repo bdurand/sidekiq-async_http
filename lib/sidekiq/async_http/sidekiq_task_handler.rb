@@ -8,7 +8,7 @@ module Sidekiq
     # - Completion and error callbacks are triggered via CallbackWorker
     # - Large payloads are stored via ExternalStorage before enqueuing
     # - Job retry uses Sidekiq::Client.push
-    class SidekiqTaskHandler < TaskHandler
+    class SidekiqTaskHandler < AsyncHttpPool::TaskHandler
       # @return [Hash] The Sidekiq job hash containing class, jid, args, etc.
       #   Exposed for TaskMonitor crash recovery serialization.
       attr_reader :sidekiq_job

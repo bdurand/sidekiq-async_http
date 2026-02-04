@@ -139,7 +139,7 @@ RSpec.describe Sidekiq::AsyncHttp do
     end
 
     it "returns false when processor is stopped" do
-      described_class.instance_variable_set(:@processor, Sidekiq::AsyncHttp::Processor.new)
+      described_class.instance_variable_set(:@processor, Sidekiq::AsyncHttp::Processor.new(described_class.configuration.http_pool))
 
       expect(described_class.running?).to be(false)
     end

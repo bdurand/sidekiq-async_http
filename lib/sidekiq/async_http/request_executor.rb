@@ -46,18 +46,26 @@ module Sidekiq
           sidekiq_job = validate_sidekiq_job(sidekiq_job)
           task_handler = SidekiqTaskHandler.new(sidekiq_job)
 
-          task = RequestTask.new(
+          config = Sidekiq::AsyncHttp.configuration.http_pool
+
+          task = AsyncHttpPool::RequestTask.new(
             request: request,
             task_handler: task_handler,
             callback: callback,
             callback_args: callback_args,
             raise_error_responses: raise_error_responses,
-            id: request_id
+            id: request_id,
+            default_max_redirects: config.max_redirects
           )
 
           # Run the request inline if Sidekiq::Testing.inline! is enabled
           if synchronous || async_disabled?
-            SynchronousExecutor.new(task).call
+            AsyncHttpPool::SynchronousExecutor.new(
+              task,
+              config: config,
+              on_complete: ->(response) { Sidekiq::AsyncHttp.invoke_completion_callbacks(response) },
+              on_error: ->(error) { Sidekiq::AsyncHttp.invoke_error_callbacks(error) }
+            ).call
             return task.id
           end
 

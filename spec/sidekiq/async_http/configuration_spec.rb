@@ -310,9 +310,9 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
     end
 
     context "when logger is not configured" do
-      it "returns Sidekiq.logger if available" do
-        config = described_class.new(logger: nil)
+      it "defaults to Sidekiq.logger" do
         allow(Sidekiq).to receive(:logger).and_return(:sidekiq_logger)
+        config = described_class.new
 
         expect(config.logger).to eq(:sidekiq_logger)
       end

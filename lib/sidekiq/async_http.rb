@@ -1,15 +1,7 @@
 # frozen_string_literal: true
 
 require "sidekiq"
-require "async"
-require "async/http"
-require "concurrent-ruby"
-require "json"
-require "uri"
-require "zlib"
-require "time"
-require "socket"
-require "securerandom"
+require_relative "../async_http_pool"
 
 # Main module for the Sidekiq Async HTTP gem.
 #
@@ -74,63 +66,56 @@ require "securerandom"
 #    processor, workers within that process share it.
 module Sidekiq
   module AsyncHttp
-    # Raised when trying to enqueue a request when the processor is not running
-    class NotRunningError < StandardError; end
+    # Re-export pool exceptions
+    NotRunningError = AsyncHttpPool::NotRunningError
+    MaxCapacityError = AsyncHttpPool::MaxCapacityError
+    ResponseTooLargeError = AsyncHttpPool::ResponseTooLargeError
 
-    class MaxCapacityError < StandardError; end
+    VERSION = AsyncHttpPool::VERSION
 
-    class ResponseTooLargeError < StandardError; end
+    # Re-export pool classes for convenience
+    ClassHelper = AsyncHttpPool::ClassHelper
+    TimeHelper = AsyncHttpPool::TimeHelper
+    CallbackArgs = AsyncHttpPool::CallbackArgs
+    CallbackValidator = AsyncHttpPool::CallbackValidator
+    HttpHeaders = AsyncHttpPool::HttpHeaders
+    Payload = AsyncHttpPool::Payload
+    PayloadStore = AsyncHttpPool::PayloadStore
+    Request = AsyncHttpPool::Request
+    RequestTemplate = AsyncHttpPool::RequestTemplate
+    Response = AsyncHttpPool::Response
+    Error = AsyncHttpPool::Error
+    HttpError = AsyncHttpPool::HttpError
+    ClientError = AsyncHttpPool::ClientError
+    ServerError = AsyncHttpPool::ServerError
+    RequestError = AsyncHttpPool::RequestError
+    RedirectError = AsyncHttpPool::RedirectError
+    TooManyRedirectsError = AsyncHttpPool::TooManyRedirectsError
+    RecursiveRedirectError = AsyncHttpPool::RecursiveRedirectError
+    TaskHandler = AsyncHttpPool::TaskHandler
+    RequestTask = AsyncHttpPool::RequestTask
+    Processor = AsyncHttpPool::Processor
+    LifecycleManager = AsyncHttpPool::LifecycleManager
 
-    VERSION = File.read(File.join(__dir__, "../../VERSION")).strip
-
-    # Autoload utility modules
-    autoload :ClassHelper, File.join(__dir__, "async_http/class_helper")
-    autoload :TimeHelper, File.join(__dir__, "async_http/time_helper")
-
-    # Autoload all components
-    autoload :AsyncClientPool, File.join(__dir__, "async_http/async_client_pool")
-    autoload :AsyncHttpClient, File.join(__dir__, "async_http/async_http_client")
-    autoload :CallbackArgs, File.join(__dir__, "async_http/callback_args")
-    autoload :CallbackArgs, File.join(__dir__, "async_http/callback_args")
-    autoload :CallbackValidator, File.join(__dir__, "async_http/callback_validator")
+    # Sidekiq-specific autoloads
     autoload :CallbackWorker, File.join(__dir__, "async_http/callback_worker")
-    autoload :ClientError, File.join(__dir__, "async_http/http_error")
     autoload :Configuration, File.join(__dir__, "async_http/configuration")
     autoload :Context, File.join(__dir__, "async_http/context")
-    autoload :Error, File.join(__dir__, "async_http/error")
     autoload :ExternalStorage, File.join(__dir__, "async_http/external_storage")
-    autoload :HttpError, File.join(__dir__, "async_http/http_error")
-    autoload :HttpHeaders, File.join(__dir__, "async_http/http_headers")
-    autoload :LifecycleManager, File.join(__dir__, "async_http/lifecycle_manager")
-    autoload :Payload, File.join(__dir__, "async_http/payload")
-    autoload :PayloadStore, File.join(__dir__, "async_http/payload_store")
-    autoload :Processor, File.join(__dir__, "async_http/processor")
     autoload :ProcessorObserver, File.join(__dir__, "async_http/processor_observer")
-    autoload :RecursiveRedirectError, File.join(__dir__, "async_http/redirect_error")
-    autoload :RedirectError, File.join(__dir__, "async_http/redirect_error")
-    autoload :RequestError, File.join(__dir__, "async_http/request_error")
-    autoload :Request, File.join(__dir__, "async_http/request")
     autoload :RequestExecutor, File.join(__dir__, "async_http/request_executor")
-    autoload :RequestTask, File.join(__dir__, "async_http/request_task")
-    autoload :RequestTemplate, File.join(__dir__, "async_http/request_template")
     autoload :RequestWorker, File.join(__dir__, "async_http/request_worker")
-    autoload :ServerError, File.join(__dir__, "async_http/http_error")
-    autoload :Response, File.join(__dir__, "async_http/response")
-    autoload :ResponseReader, File.join(__dir__, "async_http/response_reader")
     autoload :SidekiqLifecycleHooks, File.join(__dir__, "async_http/sidekiq_lifecycle_hooks")
     autoload :SidekiqTaskHandler, File.join(__dir__, "async_http/sidekiq_task_handler")
     autoload :Stats, File.join(__dir__, "async_http/stats")
-    autoload :SynchronousExecutor, File.join(__dir__, "async_http/synchronous_executor")
-    autoload :TaskHandler, File.join(__dir__, "async_http/task_handler")
     autoload :TaskMonitor, File.join(__dir__, "async_http/task_monitor")
     autoload :TaskMonitorThread, File.join(__dir__, "async_http/task_monitor_thread")
-    autoload :TooManyRedirectsError, File.join(__dir__, "async_http/redirect_error")
+    autoload :WebUI, File.join(__dir__, "async_http/web_ui")
 
     @processor = nil
     @configuration = nil
     @after_completion_callbacks = []
     @after_error_callbacks = []
-    @testing = false
 
     class << self
       attr_writer :configuration
@@ -309,7 +294,7 @@ module Sidekiq
       def start
         return if running?
 
-        @processor = Processor.new(configuration)
+        @processor = Processor.new(configuration.http_pool)
         @processor.observe(ProcessorObserver.new(@processor))
         @processor.start
       end
@@ -330,7 +315,7 @@ module Sidekiq
       def stop(timeout: nil)
         return unless @processor
 
-        timeout ||= configuration.shutdown_timeout
+        timeout ||= configuration.http_pool.shutdown_timeout
         @processor.stop(timeout: timeout)
         @processor = nil
       end
@@ -371,14 +356,14 @@ module Sidekiq
       #
       # @api private
       def testing?
-        @testing
+        AsyncHttpPool.testing?
       end
 
       # Set testing mode. This should only be set in testing environments.
       #
       # @api private
       def testing=(value)
-        @testing = !!value
+        AsyncHttpPool.testing = value
       end
 
       # Returns the processor instance (internal accessor)
