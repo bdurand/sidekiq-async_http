@@ -295,7 +295,7 @@ module Sidekiq
         return if running?
 
         @processor = Processor.new(configuration.http_pool)
-        @processor.observe(ProcessorObserver.new(@processor))
+        @processor.observe(ProcessorObserver.new(@processor, configuration))
         @processor.start
       end
 

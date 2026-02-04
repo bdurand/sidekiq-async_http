@@ -7,12 +7,12 @@ module Sidekiq
     class ProcessorObserver < AsyncHttpPool::ProcessorObserver
       attr_reader :task_monitor
 
-      def initialize(processor)
+      def initialize(processor, config)
         @processor = processor
-        @stats = Stats.new(@processor.config)
-        @task_monitor = TaskMonitor.new(@processor.config)
+        @stats = Stats.new(config)
+        @task_monitor = TaskMonitor.new(config)
         @monitor_thread = TaskMonitorThread.new(
-          @processor.config,
+          config,
           @task_monitor,
           -> { @processor.inflight_request_ids }
         )

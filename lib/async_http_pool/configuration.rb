@@ -13,9 +13,6 @@ module AsyncHttpPool
     # @return [Integer] Maximum number of concurrent connections
     attr_reader :max_connections
 
-    # @return [Numeric] Idle connection timeout in seconds
-    attr_reader :idle_connection_timeout
-
     # @return [Numeric] Default request timeout in seconds
     attr_reader :request_timeout
 
@@ -24,12 +21,6 @@ module AsyncHttpPool
 
     # @return [Integer] Maximum response size in bytes
     attr_reader :max_response_size
-
-    # @return [Numeric] Heartbeat update interval in seconds
-    attr_reader :heartbeat_interval
-
-    # @return [Numeric] Orphan detection threshold in seconds
-    attr_reader :orphan_threshold
 
     # @return [String, nil] Default User-Agent header value
     attr_accessor :user_agent
@@ -40,7 +31,8 @@ module AsyncHttpPool
     # @return [Integer] Maximum number of redirects to follow (0 disables redirects)
     attr_reader :max_redirects
 
-    # @return [Integer] Maximum number of host clients to pool
+    # @return [Integer] This is the maximum number of hosts for which connections
+    #   will be kept alive for at one time.
     attr_reader :connection_pool_size
 
     # @return [Numeric, nil] Connection timeout in seconds
@@ -58,13 +50,10 @@ module AsyncHttpPool
     # Initializes a new Configuration with the specified options.
     #
     # @param max_connections [Integer] Maximum number of concurrent connections
-    # @param idle_connection_timeout [Numeric] Idle connection timeout in seconds
     # @param request_timeout [Numeric] Default request timeout in seconds
     # @param shutdown_timeout [Numeric] Graceful shutdown timeout in seconds
     # @param logger [Logger, nil] Logger instance to use (defaults to stdout)
     # @param max_response_size [Integer] Maximum response size in bytes
-    # @param heartbeat_interval [Integer] Interval for updating inflight request heartbeats in seconds
-    # @param orphan_threshold [Integer] Age threshold for detecting orphaned requests in seconds
     # @param user_agent [String, nil] Default User-Agent header value
     # @param raise_error_responses [Boolean] Whether to raise HttpError for non-2xx responses by default
     # @param max_redirects [Integer] Maximum number of redirects to follow (0 disables redirects)
@@ -74,7 +63,6 @@ module AsyncHttpPool
     # @param retries [Integer] Number of retries for failed requests
     def initialize(
       max_connections: 256,
-      idle_connection_timeout: 60,
       request_timeout: 60,
       shutdown_timeout: 23,
       logger: nil,
@@ -90,13 +78,10 @@ module AsyncHttpPool
       retries: 3
     )
       self.max_connections = max_connections
-      self.idle_connection_timeout = idle_connection_timeout
       self.request_timeout = request_timeout
       self.shutdown_timeout = shutdown_timeout
       self.logger = logger || Logger.new($stderr, level: Logger::ERROR)
       self.max_response_size = max_response_size
-      self.heartbeat_interval = heartbeat_interval
-      self.orphan_threshold = orphan_threshold
       self.user_agent = user_agent
       self.raise_error_responses = raise_error_responses
       self.max_redirects = max_redirects
@@ -121,11 +106,6 @@ module AsyncHttpPool
       @max_connections = value
     end
 
-    def idle_connection_timeout=(value)
-      validate_positive(:idle_connection_timeout, value)
-      @idle_connection_timeout = value
-    end
-
     def request_timeout=(value)
       validate_positive(:request_timeout, value)
       @request_timeout = value
@@ -139,18 +119,6 @@ module AsyncHttpPool
     def max_response_size=(value)
       validate_positive(:max_response_size, value)
       @max_response_size = value
-    end
-
-    def heartbeat_interval=(value)
-      validate_positive(:heartbeat_interval, value)
-      @heartbeat_interval = value
-      validate_heartbeat_and_threshold
-    end
-
-    def orphan_threshold=(value)
-      validate_positive(:orphan_threshold, value)
-      @orphan_threshold = value
-      validate_heartbeat_and_threshold
     end
 
     def max_redirects=(value)
@@ -267,13 +235,10 @@ module AsyncHttpPool
     def to_h
       {
         "max_connections" => max_connections,
-        "idle_connection_timeout" => idle_connection_timeout,
         "request_timeout" => request_timeout,
         "shutdown_timeout" => shutdown_timeout,
         "logger" => logger,
         "max_response_size" => max_response_size,
-        "heartbeat_interval" => heartbeat_interval,
-        "orphan_threshold" => orphan_threshold,
         "user_agent" => user_agent,
         "raise_error_responses" => raise_error_responses,
         "max_redirects" => max_redirects,
@@ -314,14 +279,6 @@ module AsyncHttpPool
       raise ArgumentError.new("#{attribute} must be an HTTP or HTTPS URL, got: #{value.inspect}")
     rescue URI::InvalidURIError
       raise ArgumentError.new("#{attribute} must be a valid URL, got: #{value.inspect}")
-    end
-
-    def validate_heartbeat_and_threshold
-      return unless @heartbeat_interval && @orphan_threshold
-
-      return unless @heartbeat_interval >= @orphan_threshold
-
-      raise ArgumentError.new("heartbeat_interval (#{@heartbeat_interval}) must be less than orphan_threshold (#{@orphan_threshold})")
     end
   end
 end

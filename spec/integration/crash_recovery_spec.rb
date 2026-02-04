@@ -12,7 +12,7 @@ RSpec.describe "Crash Recovery", :integration do
     )
   end
   let(:processor) { Sidekiq::AsyncHttp::Processor.new(config) }
-  let(:observer) { Sidekiq::AsyncHttp::ProcessorObserver.new(processor) }
+  let(:observer) { Sidekiq::AsyncHttp::ProcessorObserver.new(processor, config) }
   let(:task_monitor) { observer.task_monitor }
   let(:web_server) { TestWebServer.new }
 
