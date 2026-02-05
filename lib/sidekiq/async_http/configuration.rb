@@ -8,10 +8,7 @@ module Sidekiq
     # Sidekiq-specific options like worker queue/retry settings.
     #
     # Access the underlying pool configuration via the +http_pool+ attribute.
-    class Configuration
-      # @return [AsyncHttpPool::Configuration] the HTTP pool configuration
-      attr_reader :http_pool
-
+    class Configuration < AsyncHttpPool::Configuration
       # @return [Numeric] Orphan detection threshold in seconds
       attr_reader :orphan_threshold
 
@@ -20,31 +17,6 @@ module Sidekiq
 
       # @return [Hash, nil] Sidekiq options to apply to RequestWorker and CallbackWorker
       attr_reader :sidekiq_options
-
-      # Delegate pool attribute getters and setters to http_pool
-      DELEGATED_ATTRS = %i[
-        max_connections request_timeout shutdown_timeout
-        max_response_size user_agent proxy_url retries logger
-        raise_error_responses max_redirects connection_pool_size connection_timeout
-      ].freeze
-      private_constant :DELEGATED_ATTRS
-
-      DELEGATED_ATTRS.each do |attr|
-        define_method(attr) { @http_pool.public_send(attr) }
-        define_method(:"#{attr}=") { |value| @http_pool.public_send(:"#{attr}=", value) }
-      end
-
-      # @!method register_payload_store(name, adapter, **options)
-      #   Register a payload store. Delegated to {http_pool}.
-      # @!method payload_store(name = nil)
-      #   Get a registered payload store. Delegated to {http_pool}.
-      # @!method default_payload_store_name
-      #   Get the default payload store name. Delegated to {http_pool}.
-      # @!method payload_stores
-      #   Get all registered payload stores. Delegated to {http_pool}.
-      %i[register_payload_store payload_store default_payload_store_name payload_stores].each do |method|
-        define_method(method) { |*args, **kwargs, &block| @http_pool.public_send(method, *args, **kwargs, &block) }
-      end
 
       # Initializes a new Configuration with the specified options.
       #
@@ -64,7 +36,7 @@ module Sidekiq
         pool_options[:user_agent] ||= "Sidekiq-AsyncHttp"
         pool_options[:logger] ||= Sidekiq.logger
 
-        @http_pool = AsyncHttpPool::Configuration.new(**pool_options)
+        super(**pool_options)
         self.sidekiq_options = sidekiq_options
         self.heartbeat_interval = heartbeat_interval
         self.orphan_threshold = orphan_threshold
@@ -107,7 +79,7 @@ module Sidekiq
       # Convert to hash for inspection
       # @return [Hash] hash representation with string keys
       def to_h
-        @http_pool.to_h.merge(
+        super.merge(
           "heartbeat_interval" => heartbeat_interval,
           "orphan_threshold" => orphan_threshold,
           "sidekiq_options" => sidekiq_options

@@ -294,8 +294,8 @@ module Sidekiq
       def start
         return if running?
 
-        @processor = Processor.new(configuration.http_pool)
-        @processor.observe(ProcessorObserver.new(@processor, configuration))
+        @processor = Processor.new(configuration)
+        @processor.observe(ProcessorObserver.new(@processor))
         @processor.start
       end
 
@@ -315,7 +315,7 @@ module Sidekiq
       def stop(timeout: nil)
         return unless @processor
 
-        timeout ||= configuration.http_pool.shutdown_timeout
+        timeout ||= configuration.shutdown_timeout
         @processor.stop(timeout: timeout)
         @processor = nil
       end

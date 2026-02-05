@@ -46,7 +46,7 @@ module Sidekiq
           sidekiq_job = validate_sidekiq_job(sidekiq_job)
           task_handler = SidekiqTaskHandler.new(sidekiq_job)
 
-          config = Sidekiq::AsyncHttp.configuration.http_pool
+          config = Sidekiq::AsyncHttp.configuration
 
           task = AsyncHttpPool::RequestTask.new(
             request: request,

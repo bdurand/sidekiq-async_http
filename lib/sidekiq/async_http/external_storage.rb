@@ -13,7 +13,7 @@ module Sidekiq
         # @param data [Hash] Hash to potentially store
         # @return [Hash] Reference hash if stored, original hash if not
         def store(data)
-          AsyncHttpPool::ExternalStorage.store(data, Sidekiq::AsyncHttp.configuration.http_pool)
+          AsyncHttpPool::ExternalStorage.store(data, Sidekiq::AsyncHttp.configuration)
         end
 
         # Check if a hash is a storage reference.
@@ -29,7 +29,7 @@ module Sidekiq
         # @param data [Hash] Reference hash containing storage location
         # @return [Hash] Original hash from storage
         def fetch(data)
-          AsyncHttpPool::ExternalStorage.fetch(data, Sidekiq::AsyncHttp.configuration.http_pool)
+          AsyncHttpPool::ExternalStorage.fetch(data, Sidekiq::AsyncHttp.configuration)
         end
 
         # Delete payload from external storage.
@@ -37,7 +37,7 @@ module Sidekiq
         # @param data [Hash, nil] Reference hash (or regular hash, which is ignored)
         # @return [void]
         def delete(data)
-          AsyncHttpPool::ExternalStorage.delete(data, Sidekiq::AsyncHttp.configuration.http_pool)
+          AsyncHttpPool::ExternalStorage.delete(data, Sidekiq::AsyncHttp.configuration)
         end
       end
     end
