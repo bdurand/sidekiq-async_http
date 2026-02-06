@@ -1,48 +1,14 @@
 # frozen_string_literal: true
 
 require "spec_helper"
-require "active_record"
 
-# Set up in-memory SQLite database before requiring the store.
-# A :memory: database exists only on the single connection, so the pool is
-# intentionally sized to 1.  The thread safety test serialises through that
-# connection via with_connection blocks.
-ActiveRecord::Base.establish_connection(
-  adapter: "sqlite3",
-  database: ":memory:",
-  pool: 1,
-  wait_timeout: 30
-)
-
-# Silence ActiveRecord schema output
-ActiveRecord::Schema.verbose = false
-
-# Create the table
-ActiveRecord::Schema.define do
-  create_table :async_http_pool_payloads, id: false, force: true do |t|
-    t.string :key, null: false, limit: 36
-    t.text :data, null: false
-
-    t.timestamps
+RSpec.describe "AsyncHttpPool::PayloadStore::ActiveRecordStore", :active_record do
+  before(:all) do
+    skip "ActiveRecord not available for testing" unless ActiveRecordHelper.available?
   end
 
-  add_index :async_http_pool_payloads, :key, unique: true
-  add_index :async_http_pool_payloads, :created_at
-end
-
-# Release the connection so it's available to tests
-ActiveRecord::Base.connection_pool.release_connection
-
-# Now require the store (which defines the Payload model)
-require "async_http_pool/payload_store/active_record_store"
-
-RSpec.describe AsyncHttpPool::PayloadStore::ActiveRecordStore do
+  let(:described_class) { AsyncHttpPool::PayloadStore::ActiveRecordStore }
   let(:store) { described_class.new }
-
-  # Clean up between tests
-  before do
-    AsyncHttpPool::PayloadStore::Payload.delete_all
-  end
 
   describe ".register" do
     it "is registered as :active_record adapter" do
@@ -53,7 +19,7 @@ RSpec.describe AsyncHttpPool::PayloadStore::ActiveRecordStore do
   describe "#initialize" do
     it "accepts default settings" do
       store = described_class.new
-      expect(store.model).to eq(AsyncHttpPool::PayloadStore::Payload)
+      expect(store.model).to eq(AsyncHttpPool::PayloadStore::ActiveRecordStore::Payload)
     end
 
     it "accepts custom model" do
@@ -72,7 +38,7 @@ RSpec.describe AsyncHttpPool::PayloadStore::ActiveRecordStore do
       key = store.store("test-key", data)
 
       expect(key).to eq("test-key")
-      record = AsyncHttpPool::PayloadStore::Payload.find_by(key: "test-key")
+      record = AsyncHttpPool::PayloadStore::ActiveRecordStore::Payload.find_by(key: "test-key")
       expect(JSON.parse(record.data)).to eq(data)
     end
 

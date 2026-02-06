@@ -13,19 +13,6 @@ require_relative "base"
 
 module AsyncHttpPool
   module PayloadStore
-    # ActiveRecord model for payload storage.
-    #
-    # Defined in this file to avoid loading ActiveRecord until explicitly required.
-    # The table must be created using the migration provided by this gem.
-    #
-    # @example Install migrations in a Rails app
-    #   rails async_http_pool:install:migrations
-    #   rails db:migrate
-    class Payload < ::ActiveRecord::Base
-      self.table_name = "async_http_pool_payloads"
-      self.primary_key = "key"
-    end
-
     # ActiveRecord-based payload store for production deployments.
     #
     # Stores payloads as JSON in a database table. This store is recommended
@@ -44,13 +31,26 @@ module AsyncHttpPool
     class ActiveRecordStore < Base
       Base.register :active_record, self
 
+      # ActiveRecord model for payload storage.
+      #
+      # Defined in this file to avoid loading ActiveRecord until explicitly required.
+      # The table must be created using the migration provided by this gem.
+      #
+      # @example Install migrations in a Rails app
+      #   rails async_http_pool:install:migrations
+      #   rails db:migrate
+      class Payload < ::ActiveRecord::Base
+        self.table_name = "async_http_pool_payloads"
+        self.primary_key = "key"
+      end
+
       # @return [Class] The ActiveRecord model class used for storage
       attr_reader :model
 
       # Initialize a new ActiveRecord store.
       #
       # @param model [Class] ActiveRecord model class to use for storage.
-      #   Defaults to AsyncHttpPool::PayloadStore::Payload.
+      #   Defaults to AsyncHttpPool::PayloadStore::ActiveRecordStore::Payload.
       #   Custom models must have: key (string PK), data (text), timestamps
       def initialize(model: nil)
         @model = model || Payload

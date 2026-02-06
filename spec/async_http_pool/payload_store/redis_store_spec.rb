@@ -3,17 +3,11 @@
 require "spec_helper"
 
 RSpec.describe AsyncHttpPool::PayloadStore::RedisStore do
-  # Helper to get a Redis connection for tests
-  def with_redis(&block)
-    Sidekiq.redis(&block)
+  before(:all) do
+    skip "Redis not available for testing" unless RedisHelper.available?
   end
 
-  # Create stores using Sidekiq.redis block pattern
-  def create_store(**options)
-    Sidekiq.redis do |redis|
-      described_class.new(redis: redis, **options)
-    end
-  end
+  let(:redis) { RedisHelper.redis }
 
   describe ".register" do
     it "is registered as :redis adapter" do
@@ -27,153 +21,121 @@ RSpec.describe AsyncHttpPool::PayloadStore::RedisStore do
     end
 
     it "accepts redis client" do
-      with_redis do |redis|
-        store = described_class.new(redis: redis)
-        expect(store).to be_a(described_class)
-      end
+      store = described_class.new(redis: redis)
+      expect(store).to be_a(described_class)
     end
 
     it "accepts custom TTL" do
-      with_redis do |redis|
-        store = described_class.new(redis: redis, ttl: 3600)
-        expect(store.ttl).to eq(3600)
-      end
+      store = described_class.new(redis: redis, ttl: 3600)
+      expect(store.ttl).to eq(3600)
     end
 
     it "defaults TTL to nil" do
-      with_redis do |redis|
-        store = described_class.new(redis: redis)
-        expect(store.ttl).to be_nil
-      end
+      store = described_class.new(redis: redis)
+      expect(store.ttl).to be_nil
     end
 
     it "accepts custom key_prefix" do
-      with_redis do |redis|
-        store = described_class.new(redis: redis, key_prefix: "custom:")
-        expect(store.key_prefix).to eq("custom:")
-      end
+      store = described_class.new(redis: redis, key_prefix: "custom:")
+      expect(store.key_prefix).to eq("custom:")
     end
 
     it "defaults key_prefix to async_http_pool:payloads:" do
-      with_redis do |redis|
-        store = described_class.new(redis: redis)
-        expect(store.key_prefix).to eq("async_http_pool:payloads:")
-      end
+      store = described_class.new(redis: redis)
+      expect(store.key_prefix).to eq("async_http_pool:payloads:")
     end
   end
 
   describe "#store" do
     it "stores data as JSON in Redis" do
-      with_redis do |redis|
-        store = described_class.new(redis: redis)
-        data = {"status" => 200, "body" => "test"}
-        key = store.store("test-key", data)
+      store = described_class.new(redis: redis)
+      data = {"status" => 200, "body" => "test"}
+      key = store.store("test-key", data)
 
-        expect(key).to eq("test-key")
-        stored = redis.get("async_http_pool:payloads:test-key")
-        expect(stored).to eq(JSON.generate(data))
-      end
+      expect(key).to eq("test-key")
+      stored = redis.get("async_http_pool:payloads:test-key")
+      expect(stored).to eq(JSON.generate(data))
     end
 
     it "uses custom key_prefix" do
-      with_redis do |redis|
-        store = described_class.new(redis: redis, key_prefix: "test:payloads:")
-        data = {"status" => 200}
-        store.store("test-key", data)
+      store = described_class.new(redis: redis, key_prefix: "test:payloads:")
+      data = {"status" => 200}
+      store.store("test-key", data)
 
-        expect(redis.get("test:payloads:test-key")).to eq(JSON.generate(data))
-      end
+      expect(redis.get("test:payloads:test-key")).to eq(JSON.generate(data))
     end
 
     it "overwrites existing data" do
-      with_redis do |redis|
-        store = described_class.new(redis: redis)
-        store.store("test-key", {"version" => 1})
-        store.store("test-key", {"version" => 2})
+      store = described_class.new(redis: redis)
+      store.store("test-key", {"version" => 1})
+      store.store("test-key", {"version" => 2})
 
-        fetched = store.fetch("test-key")
-        expect(fetched["version"]).to eq(2)
-      end
+      fetched = store.fetch("test-key")
+      expect(fetched["version"]).to eq(2)
     end
 
     it "sets TTL when configured" do
-      with_redis do |redis|
-        store = described_class.new(redis: redis, ttl: 60)
-        store.store("test-key", {"data" => "value"})
+      store = described_class.new(redis: redis, ttl: 60)
+      store.store("test-key", {"data" => "value"})
 
-        ttl = redis.ttl("async_http_pool:payloads:test-key")
-        expect(ttl).to be > 0
-        expect(ttl).to be <= 60
-      end
+      ttl = redis.ttl("async_http_pool:payloads:test-key")
+      expect(ttl).to be > 0
+      expect(ttl).to be <= 60
     end
 
     it "does not set TTL when not configured" do
-      with_redis do |redis|
-        store = described_class.new(redis: redis)
-        store.store("test-key", {"data" => "value"})
+      store = described_class.new(redis: redis)
+      store.store("test-key", {"data" => "value"})
 
-        ttl = redis.ttl("async_http_pool:payloads:test-key")
-        expect(ttl).to eq(-1)
-      end
+      ttl = redis.ttl("async_http_pool:payloads:test-key")
+      expect(ttl).to eq(-1)
     end
   end
 
   describe "#fetch" do
     it "retrieves stored data" do
-      with_redis do |redis|
-        store = described_class.new(redis: redis)
-        data = {"status" => 200, "headers" => {"content-type" => "application/json"}}
-        store.store("test-key", data)
+      store = described_class.new(redis: redis)
+      data = {"status" => 200, "headers" => {"content-type" => "application/json"}}
+      store.store("test-key", data)
 
-        fetched = store.fetch("test-key")
-        expect(fetched).to eq(data)
-      end
+      fetched = store.fetch("test-key")
+      expect(fetched).to eq(data)
     end
 
     it "returns nil for non-existent keys" do
-      with_redis do |redis|
-        store = described_class.new(redis: redis)
-        expect(store.fetch("nonexistent")).to be_nil
-      end
+      store = described_class.new(redis: redis)
+      expect(store.fetch("nonexistent")).to be_nil
     end
   end
 
   describe "#delete" do
     it "removes stored data" do
-      with_redis do |redis|
-        store = described_class.new(redis: redis)
-        store.store("test-key", {"data" => "value"})
-        expect(store.fetch("test-key")).not_to be_nil
+      store = described_class.new(redis: redis)
+      store.store("test-key", {"data" => "value"})
+      expect(store.fetch("test-key")).not_to be_nil
 
-        result = store.delete("test-key")
-        expect(result).to be true
-        expect(store.fetch("test-key")).to be_nil
-      end
+      result = store.delete("test-key")
+      expect(result).to be true
+      expect(store.fetch("test-key")).to be_nil
     end
 
     it "is idempotent for non-existent keys" do
-      with_redis do |redis|
-        store = described_class.new(redis: redis)
-        expect(store.delete("nonexistent")).to be true
-        expect(store.delete("nonexistent")).to be true
-      end
+      store = described_class.new(redis: redis)
+      expect(store.delete("nonexistent")).to be true
+      expect(store.delete("nonexistent")).to be true
     end
   end
 
   describe "#exists?" do
     it "returns true for existing keys" do
-      with_redis do |redis|
-        store = described_class.new(redis: redis)
-        store.store("test-key", {"data" => "value"})
-        expect(store.exists?("test-key")).to be true
-      end
+      store = described_class.new(redis: redis)
+      store.store("test-key", {"data" => "value"})
+      expect(store.exists?("test-key")).to be true
     end
 
     it "returns false for non-existent keys" do
-      with_redis do |redis|
-        store = described_class.new(redis: redis)
-        expect(store.exists?("nonexistent")).to be false
-      end
+      store = described_class.new(redis: redis)
+      expect(store.exists?("nonexistent")).to be false
     end
   end
 
@@ -201,38 +163,34 @@ RSpec.describe AsyncHttpPool::PayloadStore::RedisStore do
 
   describe "round trip" do
     it "stores and retrieves complex data" do
-      with_redis do |redis|
-        store = described_class.new(redis: redis)
-        data = {
-          "status" => 200,
-          "headers" => {"content-type" => "application/json", "x-custom" => "value"},
-          "body" => {"encoding" => "text", "value" => "large body " * 1000},
-          "duration" => 0.5,
-          "redirects" => ["http://old.url", "http://new.url"]
-        }
+      store = described_class.new(redis: redis)
+      data = {
+        "status" => 200,
+        "headers" => {"content-type" => "application/json", "x-custom" => "value"},
+        "body" => {"encoding" => "text", "value" => "large body " * 1000},
+        "duration" => 0.5,
+        "redirects" => ["http://old.url", "http://new.url"]
+      }
 
-        key = store.generate_key
-        store.store(key, data)
-        fetched = store.fetch(key)
+      key = store.generate_key
+      store.store(key, data)
+      fetched = store.fetch(key)
 
-        expect(fetched).to eq(data)
-      end
+      expect(fetched).to eq(data)
     end
   end
 
   describe "TTL expiration" do
     it "keys expire after TTL" do
-      with_redis do |redis|
-        store = described_class.new(redis: redis, ttl: 1)
-        store.store("expiring-key", {"data" => "value"})
+      store = described_class.new(redis: redis, ttl: 0.1)
+      store.store("expiring-key", {"data" => "value"})
 
-        expect(store.exists?("expiring-key")).to be true
+      expect(store.exists?("expiring-key")).to be true
 
-        sleep(1.5)
+      sleep(0.11)
 
-        expect(store.exists?("expiring-key")).to be false
-        expect(store.fetch("expiring-key")).to be_nil
-      end
+      expect(store.exists?("expiring-key")).to be false
+      expect(store.fetch("expiring-key")).to be_nil
     end
   end
 end

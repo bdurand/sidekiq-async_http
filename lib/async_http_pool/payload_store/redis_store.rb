@@ -19,14 +19,14 @@ module AsyncHttpPool
       # @return [String] The key prefix used for all stored payloads
       attr_reader :key_prefix
 
-      # @return [Integer, nil] TTL in seconds for stored payloads
+      # @return [Float, nil] TTL in seconds for stored payloads
       attr_reader :ttl
 
       # Initialize a new Redis store.
       #
       # @param redis [Object] Redis client instance. Required.
-      # @param ttl [Integer, nil] Time-to-live in seconds for stored payloads.
-      #   If nil, payloads do not expire.
+      # @param ttl [Float, nil] Time-to-live in seconds for stored payloads.
+      #   Supports fractional seconds (e.g., 0.5 for 500ms). If nil, payloads do not expire.
       # @param key_prefix [String] Prefix for all Redis keys.
       #   Defaults to "async_http_pool:payloads:"
       # @raise [ArgumentError] If redis client is not provided
@@ -48,7 +48,9 @@ module AsyncHttpPool
         json = JSON.generate(data)
 
         if @ttl
-          @redis.set(full_key, json, ex: @ttl)
+          # Convert seconds to milliseconds for fractional second precision
+          ttl_ms = (@ttl * 1000).round
+          @redis.set(full_key, json, px: ttl_ms)
         else
           @redis.set(full_key, json)
         end

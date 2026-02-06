@@ -12,6 +12,19 @@ module S3Helper
   TEST_BUCKET_NAME = ENV.fetch("S3_TEST_BUCKET", "test-payloads")
 
   class << self
+    def available?
+      @available ||= begin
+        require "aws-sdk-s3"
+        true
+      rescue LoadError
+        false
+      end
+    end
+
+    def setup
+      S3Helper.ensure_bucket_exists if available?
+    end
+
     def s3_client
       @s3_client ||= begin
         require "aws-sdk-s3"

@@ -27,9 +27,21 @@ jobs:
           - 24455:6379
         options: >-
           --health-cmd "valkey-cli ping"
-          --health-interval 10s
+          --health-interval 1s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
+      minio:
+        image: minio/minio:latest
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
+          --health-interval 1s
+          --health-timeout 5s
+          --health-retries 10
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
     strategy:
       fail-fast: false
       matrix:
@@ -37,6 +49,8 @@ jobs:
           - ruby: "ruby"
             yard: true
             standardrb: true
+          - ruby: "ruby"
+            appraisal: "without_payload_store_gems"
           - ruby: "4.0"
             appraisal: "sidekiq_8"
           - ruby: "3.4"
@@ -45,6 +59,12 @@ jobs:
             appraisal: "sidekiq_7"
           - ruby: "3.2"
             appraisal: "sidekiq_7.0"
+          - ruby: "4.0"
+            appraisal: "activerecord_8"
+          - ruby: "3.3"
+            appraisal: "activerecord_7"
+          - ruby: "4.0"
+            appraisal: "redis_5"
     steps:
     - uses: actions/checkout@v2
     - name: Set up Ruby ${{ matrix.ruby }}

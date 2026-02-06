@@ -2,11 +2,12 @@
 
 require "spec_helper"
 
-RSpec.describe AsyncHttpPool::PayloadStore::S3Store, :s3 do
-  # Skip all tests if S3/Minio is not available
+RSpec.describe "AsyncHttpPool::PayloadStore::S3Store", :s3 do
   before(:all) do
-    skip "S3/Minio not available" unless defined?(S3_AVAILABLE) && S3_AVAILABLE
+    skip "S3/Minio not available for testing" unless S3Helper.available?
   end
+
+  let(:described_class) { AsyncHttpPool::PayloadStore::S3Store }
 
   let(:bucket) { S3Helper.test_bucket }
   let(:store) { described_class.new(bucket: bucket) }
@@ -73,7 +74,6 @@ RSpec.describe AsyncHttpPool::PayloadStore::S3Store, :s3 do
       object = bucket.object("async_http_pool/payloads/test-key")
       expect(object.content_type).to eq("application/json")
     end
-
   end
 
   describe "#fetch" do
@@ -152,5 +152,4 @@ RSpec.describe AsyncHttpPool::PayloadStore::S3Store, :s3 do
       expect(fetched).to eq(data)
     end
   end
-
 end
