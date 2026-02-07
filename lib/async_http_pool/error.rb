@@ -57,5 +57,20 @@ module AsyncHttpPool
     def callback_args
       raise NotImplementedError, "Subclasses must implement #callback_args"
     end
+
+    # Serialize to a hash for JSON encoding. Subclasses must implement this.
+    #
+    # @return [Hash] hash representation of the error
+    def as_json
+      raise NotImplementedError, "Subclasses must implement #as_json"
+    end
+
+    # Serialize to JSON string.
+    #
+    # @param options [Hash] options to pass to JSON.generate (for ActiveSupport compatibility)
+    # @return [String] JSON representation
+    def to_json(options = nil)
+      JSON.generate(as_json, options)
+    end
   end
 end

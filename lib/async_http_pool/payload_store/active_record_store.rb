@@ -1,14 +1,5 @@
 # frozen_string_literal: true
 
-# This file must be explicitly required - it is NOT autoloaded.
-# Usage: require "async_http_pool/payload_store/active_record_store"
-
-begin
-  require "active_record"
-rescue LoadError
-  raise LoadError, "ActiveRecord is required for ActiveRecordStore. Add 'activerecord' to your Gemfile."
-end
-
 require_relative "base"
 
 module AsyncHttpPool
@@ -22,10 +13,10 @@ module AsyncHttpPool
     #
     # @example Configuration
     #   require "async_http_pool/payload_store/active_record_store"
-    #   config.register_payload_store(:database, :active_record)
+    #   config.register_payload_store(:database, adapter: :active_record)
     #
     # @example With custom model
-    #   config.register_payload_store(:database, :active_record,
+    #   config.register_payload_store(:database, adapter: :active_record,
     #     model: MyApp::PayloadRecord
     #   )
     class ActiveRecordStore < Base

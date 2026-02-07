@@ -7,7 +7,7 @@ RSpec.describe AsyncHttpPool::ExternalStorage do
   let(:temp_dir) { Dir.mktmpdir("external_storage_test") }
   let(:config) do
     c = AsyncHttpPool::Configuration.new
-    c.register_payload_store(:test, :file, directory: temp_dir)
+    c.register_payload_store(:test, adapter: :file, directory: temp_dir)
     c.payload_store_threshold = 100
     c
   end
@@ -179,7 +179,7 @@ RSpec.describe AsyncHttpPool::ExternalStorage do
     it "reads from old store while writing to new store" do
       # Setup old store config and create a stored payload
       old_config = AsyncHttpPool::Configuration.new
-      old_config.register_payload_store(:old_store, :file, directory: old_dir)
+      old_config.register_payload_store(:old_store, adapter: :file, directory: old_dir)
       old_config.payload_store_threshold = 100
 
       large_data = {"body" => "x" * 200}
@@ -188,8 +188,8 @@ RSpec.describe AsyncHttpPool::ExternalStorage do
 
       # New config has both stores registered; new_store is the default (registered last)
       migration_config = AsyncHttpPool::Configuration.new
-      migration_config.register_payload_store(:old_store, :file, directory: old_dir)
-      migration_config.register_payload_store(:new_store, :file, directory: new_dir)
+      migration_config.register_payload_store(:old_store, adapter: :file, directory: old_dir)
+      migration_config.register_payload_store(:new_store, adapter: :file, directory: new_dir)
       migration_config.payload_store_threshold = 100
 
       # New writes go to new store

@@ -12,7 +12,7 @@ module AsyncHttpPool
     #
     # @example Configuration with direct Redis client
     #   redis = RedisClient.new(url: ENV["REDIS_URL"])
-    #   config.register_payload_store(:redis, :redis, redis: redis, ttl: 86400)
+    #   config.register_payload_store(:redis, adapter: :redis, redis: redis, ttl: 86400)
     class RedisStore < Base
       Base.register :redis, self
 

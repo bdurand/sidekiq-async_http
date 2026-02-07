@@ -19,7 +19,7 @@ module AsyncHttpPool
     # @example Configuration with S3 bucket
     #   s3 = Aws::S3::Resource.new
     #   bucket = s3.bucket("my-payloads-bucket")
-    #   config.register_payload_store(:s3, :s3, bucket: bucket)
+    #   config.register_payload_store(:s3, adapter: :s3, bucket: bucket)
     class S3Store < Base
       Base.register :s3, self
 

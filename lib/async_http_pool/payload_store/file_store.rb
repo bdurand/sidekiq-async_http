@@ -13,7 +13,7 @@ module AsyncHttpPool
     # Thread-safe through mutex synchronization.
     #
     # @example Configuration
-    #   config.register_payload_store(:files, :file, directory: "/tmp/payloads")
+    #   config.register_payload_store(:files, adapter: :file, directory: "/tmp/payloads")
     class FileStore < Base
       Base.register :file, self
 

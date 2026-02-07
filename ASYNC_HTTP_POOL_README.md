@@ -173,6 +173,101 @@ response.callback_args["user_id"]   # String access
 
 Callback args must contain only JSON-native types (`nil`, `true`, `false`, `String`, `Integer`, `Float`, `Array`, `Hash`). Hash keys are converted to strings for serialization.
 
+## Response and Error Objects
+
+The `AsyncHttpPool::Response` and error objects are designed to be serializable and deserializable as JSON, making them safe to pass through job queues and across process boundaries. This allows you to enqueue the response or error data in your `TaskHandler` callbacks and process them asynchronously in another context.
+
+Both response and error objects provide `as_json` and `to_json` methods for serialization:
+
+```ruby
+def on_complete(response, callback)
+  # Serialize the response for background processing
+  MyJobSystem.enqueue(callback, :on_complete, response.as_json)
+end
+
+def on_error(error, callback)
+  # Serialize the error for background processing
+  MyJobSystem.enqueue(callback, :on_error, error.as_json)
+end
+```
+
+When deserializing, use the class methods to reconstruct the objects:
+
+```ruby
+response = AsyncHttpPool::Response.from_json(json_data)
+error = AsyncHttpPool::HttpError.from_json(json_data)
+```
+
+The `Response` object includes the HTTP status code, headers, body, and callback arguments. Error objects (`HttpError`, `RedirectError`, `RequestError`) include the error message, context about the request, and callback arguments.
+
+Response bodies are automatically encoded for JSON serialization. Binary content is Base64 encoded, and large text content is gzipped and then Base64 encoded to reduce payload size.
+
+### Payload Stores
+
+For large request/response payloads, you can configure external storage to keep job arguments small. Payloads exceeding the configured threshold are automatically stored externally and fetched on demand.
+
+```ruby
+# Set the size threshold (default: 100KB)
+config.payload_store_threshold = 100_000
+```
+
+#### File Store
+
+For development and testing:
+
+```ruby
+config.register_payload_store(:files, adapter: :file, directory: "/tmp/payloads")
+```
+
+#### Redis Store
+
+For production with shared state across processes:
+
+```ruby
+redis = RedisClient.new(url: ENV["REDIS_URL"])
+config.register_payload_store(:redis, adapter: :redis, redis: redis, ttl: 86400)
+```
+
+Options: `redis:` (required), `ttl:` (seconds, optional), `key_prefix:` (default: `"async_http_pool:payloads:"`)
+
+#### S3 Store
+
+For durable storage across instances (requires `aws-sdk-s3` gem):
+
+```ruby
+s3 = Aws::S3::Resource.new
+bucket = s3.bucket("my-payloads-bucket")
+config.register_payload_store(:s3, adapter: :s3, bucket: bucket)
+```
+
+Options: `bucket:` (required), `key_prefix:` (default: `"async_http_pool/payloads/"`)
+
+#### Custom Stores
+
+Implement your own by subclassing `AsyncHttpPool::PayloadStore::Base`:
+
+```ruby
+class MyStore < AsyncHttpPool::PayloadStore::Base
+  register :my_store, self
+
+  def store(key, data)
+    # Store the hash and return the key
+  end
+
+  def fetch(key)
+    # Return the hash or nil if not found
+  end
+
+  def delete(key)
+    # Delete the data (idempotent)
+  end
+end
+
+config.register_payload_store(:custom, adapter: :my_store, **options)
+```
+
+Multiple stores can be registered for migration purposes. The last registered store is used for new writes; all registered stores remain available for reads.
+
 ## Configuration
 
 ```ruby
@@ -221,72 +316,6 @@ config = AsyncHttpPool::Configuration.new(
 - **request_timeout**: Set based on expected API response times. AI/LLM APIs may need minutes.
 - **connection_pool_size**: Increase for applications calling many different API hosts.
 - **max_response_size**: Keeps memory usage bounded. Large responses may need external payload storage.
-
-## Payload Stores
-
-For large request/response payloads, you can configure external storage to keep job arguments small. Payloads exceeding the configured threshold are automatically stored externally and fetched on demand.
-
-```ruby
-# Set the size threshold (default: 100KB)
-config.payload_store_threshold = 100_000
-```
-
-### File Store
-
-For development and testing:
-
-```ruby
-config.register_payload_store(:files, :file, directory: "/tmp/payloads")
-```
-
-### Redis Store
-
-For production with shared state across processes:
-
-```ruby
-redis = RedisClient.new(url: ENV["REDIS_URL"])
-config.register_payload_store(:redis, :redis, redis: redis, ttl: 86400)
-```
-
-Options: `redis:` (required), `ttl:` (seconds, optional), `key_prefix:` (default: `"async_http_pool:payloads:"`)
-
-### S3 Store
-
-For durable storage across instances (requires `aws-sdk-s3` gem):
-
-```ruby
-s3 = Aws::S3::Resource.new
-bucket = s3.bucket("my-payloads-bucket")
-config.register_payload_store(:s3, :s3, bucket: bucket)
-```
-
-Options: `bucket:` (required), `key_prefix:` (default: `"async_http_pool/payloads/"`)
-
-### Custom Stores
-
-Implement your own by subclassing `AsyncHttpPool::PayloadStore::Base`:
-
-```ruby
-class MyStore < AsyncHttpPool::PayloadStore::Base
-  register :my_store, self
-
-  def store(key, data)
-    # Store the hash and return the key
-  end
-
-  def fetch(key)
-    # Return the hash or nil if not found
-  end
-
-  def delete(key)
-    # Delete the data (idempotent)
-  end
-end
-
-config.register_payload_store(:custom, :my_store, **options)
-```
-
-Multiple stores can be registered for migration purposes. The last registered store is used for new writes; all registered stores remain available for reads.
 
 ## Processor Lifecycle
 

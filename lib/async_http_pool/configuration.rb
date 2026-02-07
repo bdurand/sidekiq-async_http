@@ -167,9 +167,12 @@ module AsyncHttpPool
     # @param options [Hash] Options passed to the adapter constructor
     # @return [void]
     # @raise [ArgumentError] If the adapter is not registered
-    def register_payload_store(name, adapter, **options)
+    def register_payload_store(name, adapter:, **options)
       name = name.to_sym
       adapter = adapter.to_sym
+
+      # Trigger autoload for common adapters
+      ensure_adapter_loaded(adapter)
 
       unless PayloadStore::Base.lookup(adapter)
         raise ArgumentError, "Unknown payload store adapter: #{adapter.inspect}. " \
@@ -279,6 +282,23 @@ module AsyncHttpPool
       raise ArgumentError.new("#{attribute} must be an HTTP or HTTPS URL, got: #{value.inspect}")
     rescue URI::InvalidURIError
       raise ArgumentError.new("#{attribute} must be a valid URL, got: #{value.inspect}")
+    end
+
+    # Ensure adapter class is loaded (triggers autoload).
+    #
+    # @param adapter [Symbol] The adapter name
+    # @return [void]
+    def ensure_adapter_loaded(adapter)
+      case adapter
+      when :file
+        PayloadStore::FileStore
+      when :redis
+        PayloadStore::RedisStore
+      when :s3
+        PayloadStore::S3Store
+      when :active_record
+        PayloadStore::ActiveRecordStore
+      end
     end
   end
 end

@@ -171,5 +171,13 @@ module AsyncHttpPool
         "redirects" => @redirects
       }
     end
+
+    # Serialize to JSON string.
+    #
+    # @param options [Hash] options to pass to JSON.generate (for ActiveSupport compatibility)
+    # @return [String] JSON representation
+    def to_json(options = nil)
+      JSON.generate(as_json, options)
+    end
   end
 end
