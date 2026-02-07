@@ -65,10 +65,15 @@ module AsyncHttpPool
         json = JSON.generate(data)
         now = Time.current
 
+        # Rails 7.1+ supports update_only, Rails 7.0 does not
+        upsert_options = {unique_by: :key}
+        if ::ActiveRecord.version >= Gem::Version.new("7.1")
+          upsert_options[:update_only] = [:data, :updated_at]
+        end
+
         @model.upsert(
           {key: key, data: json, created_at: now, updated_at: now},
-          unique_by: :key,
-          update_only: [:data, :updated_at]
+          **upsert_options
         )
         key
       end
