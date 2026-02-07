@@ -65,20 +65,5 @@ module S3Helper
       @s3_client = nil
       @s3_resource = nil
     end
-
-    def available?
-      require "aws-sdk-s3"
-      s3_client.head_bucket(bucket: TEST_BUCKET_NAME)
-      true
-    rescue LoadError, Aws::S3::Errors::ServiceError, Seahorse::Client::NetworkingError
-      false
-    rescue => e
-      # Handle connection refused and other network errors
-      if e.message.include?("Connection refused") || e.message.include?("Failed to open TCP connection")
-        false
-      else
-        raise
-      end
-    end
   end
 end
