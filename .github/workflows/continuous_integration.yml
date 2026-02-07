@@ -30,20 +30,6 @@ jobs:
           --health-interval 1s
           --health-timeout 5s
           --health-retries 10
-      minio:
-        image: minio/minio
-        ports:
-          - 9000:9000
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-          MINIO_DOMAIN: localhost
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-          minio server /data --console-address ":9001"
     strategy:
       fail-fast: false
       matrix:
@@ -69,6 +55,28 @@ jobs:
             appraisal: "redis_5"
     steps:
     - uses: actions/checkout@v2
+    - name: Start MinIO
+      run: |
+        docker run -d \
+          --name minio \
+          -p 9000:9000 \
+          -e MINIO_ROOT_USER=minioadmin \
+          -e MINIO_ROOT_PASSWORD=minioadmin \
+          minio/minio server /data --console-address ":9001"
+        timeout=5
+        elapsed=0
+        while [ $elapsed -lt $timeout ]; do
+          if curl -sf http://localhost:9000/minio/health/live > /dev/null 2>&1; then
+            echo "MinIO is ready"
+            break
+          fi
+          sleep 0.5
+          elapsed=$((elapsed + 1))
+        done
+        if [ $elapsed -ge $timeout ]; then
+          echo "MinIO failed to start within ${timeout} seconds"
+          exit 1
+        fi
     - name: Set up Ruby ${{ matrix.ruby }}
       uses: ruby/setup-ruby@v1
       with:
