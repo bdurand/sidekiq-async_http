@@ -7,9 +7,6 @@ module AsyncHttpPool
   # including connection limits, timeouts, and other HTTP client settings.
   # It has no dependencies on any job system.
   class Configuration
-    # Default threshold in bytes above which payloads are stored externally
-    DEFAULT_PAYLOAD_STORE_THRESHOLD = 64 * 1024 # 64KB
-
     # @return [Integer] Maximum number of concurrent connections
     attr_reader :max_connections
 
@@ -43,9 +40,6 @@ module AsyncHttpPool
 
     # @return [Integer] Number of retries for failed requests
     attr_reader :retries
-
-    # @return [Integer] Size threshold in bytes for external payload storage
-    attr_reader :payload_store_threshold
 
     # Initializes a new Configuration with the specified options.
     #
@@ -93,7 +87,6 @@ module AsyncHttpPool
       # Initialize payload store configuration
       @payload_stores = {}
       @default_payload_store_name = nil
-      @payload_store_threshold = DEFAULT_PAYLOAD_STORE_THRESHOLD
       @payload_store_mutex = Mutex.new
     end
 
@@ -221,18 +214,6 @@ module AsyncHttpPool
       end
     end
 
-    # Set the threshold size for external payload storage.
-    #
-    # Payloads larger than this size (in bytes) will be stored externally
-    # when a payload store is configured.
-    #
-    # @param value [Integer] Threshold in bytes
-    # @raise [ArgumentError] If value is not a positive integer
-    def payload_store_threshold=(value)
-      validate_positive_integer(:payload_store_threshold, value)
-      @payload_store_threshold = value
-    end
-
     # Convert to hash for inspection
     # @return [Hash] hash representation with string keys
     def to_h
@@ -249,7 +230,6 @@ module AsyncHttpPool
         "connection_timeout" => connection_timeout,
         "proxy_url" => proxy_url,
         "retries" => retries,
-        "payload_store_threshold" => payload_store_threshold,
         "payload_stores" => payload_stores.keys,
         "default_payload_store" => default_payload_store_name
       }

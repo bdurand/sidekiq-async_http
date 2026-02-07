@@ -54,19 +54,30 @@ module AsyncHttpPool
       self.class.storage_ref?(data)
     end
 
+    # Check if external storage is enabled (i.e. a payload store is configured).
+    #
+    # @return [Boolean] true if external storage is configured
+    def enabled?
+      !!config.payload_store
+    end
+
     # Store a hash externally if it exceeds the configured threshold.
     #
     # If no payload store is configured, or if the hash is below the
     # threshold, the original hash is returned unchanged.
     #
     # @param data [Hash] Hash to potentially store
+    # @param max_size [Integer, nil] Optional payload size threshold in bytes.
+    #   The JSON payload will only be stored externally if it exceeds this size.
+    #   If the JSON payload does not exceed the threshold, the original hash is returned.
     # @return [Hash] Reference hash if stored, original hash if not
-    def store(data)
+    # @raise [PayloadStoreNotFoundError] If no payload store is configured
+    def store(data, max_size: nil)
       store = config.payload_store
-      return data unless store
+      raise PayloadStoreNotFoundError.new("No payload store configured") unless store
 
       json_size = data.to_json.bytesize
-      return data if json_size < config.payload_store_threshold
+      return data if max_size && json_size <= max_size
 
       key = store.generate_key
       store.store(key, data)

@@ -8,7 +8,6 @@ RSpec.describe AsyncHttpPool::ExternalStorage do
   let(:config) do
     c = AsyncHttpPool::Configuration.new
     c.register_payload_store(:test, adapter: :file, directory: temp_dir)
-    c.payload_store_threshold = 100
     c
   end
   let(:external_storage) { described_class.new(config) }
@@ -17,16 +16,37 @@ RSpec.describe AsyncHttpPool::ExternalStorage do
     FileUtils.rm_rf(temp_dir)
   end
 
+  describe "#enabled?" do
+    it "returns true when payload store is configured" do
+      expect(external_storage.enabled?).to be true
+    end
+
+    it "returns false when no payload store is configured" do
+      empty_config = AsyncHttpPool::Configuration.new
+      empty_storage = described_class.new(empty_config)
+      expect(empty_storage.enabled?).to be false
+    end
+  end
+
   describe "#store" do
+    it "stores data in payload store and returns reference when max size not specified" do
+      data = {"body" => "x"}
+      result = external_storage.store(data)
+
+      expect(result).to have_key("$ref")
+      expect(result["$ref"]["store"]).to eq("test")
+      expect(result["$ref"]["key"]).to match(/^[0-9a-f-]{36}$/)
+    end
+
     it "returns original hash when below threshold" do
       small_data = {"status" => 200}
-      result = external_storage.store(small_data)
+      result = external_storage.store(small_data, max_size: 100)
       expect(result).to eq(small_data)
     end
 
     it "stores externally and returns reference when above threshold" do
       large_data = {"body" => "x" * 200}
-      result = external_storage.store(large_data)
+      result = external_storage.store(large_data, max_size: 100)
 
       expect(result).not_to eq(large_data)
       expect(result).to have_key("$ref")
@@ -34,12 +54,11 @@ RSpec.describe AsyncHttpPool::ExternalStorage do
       expect(result["$ref"]["key"]).to match(/^[0-9a-f-]{36}$/)
     end
 
-    it "returns original hash when no payload store is configured" do
+    it "raises PayloadStoreNotFoundError when no payload store is configured" do
       empty_config = AsyncHttpPool::Configuration.new
       empty_storage = described_class.new(empty_config)
       large_data = {"body" => "x" * 200}
-      result = empty_storage.store(large_data)
-      expect(result).to eq(large_data)
+      expect { empty_storage.store(large_data) }.to raise_error(AsyncHttpPool::ExternalStorage::PayloadStoreNotFoundError)
     end
   end
 
@@ -187,7 +206,6 @@ RSpec.describe AsyncHttpPool::ExternalStorage do
       # Setup old store config and create a stored payload
       old_config = AsyncHttpPool::Configuration.new
       old_config.register_payload_store(:old_store, adapter: :file, directory: old_dir)
-      old_config.payload_store_threshold = 100
       old_storage = described_class.new(old_config)
 
       large_data = {"body" => "x" * 200}
@@ -198,7 +216,6 @@ RSpec.describe AsyncHttpPool::ExternalStorage do
       migration_config = AsyncHttpPool::Configuration.new
       migration_config.register_payload_store(:old_store, adapter: :file, directory: old_dir)
       migration_config.register_payload_store(:new_store, adapter: :file, directory: new_dir)
-      migration_config.payload_store_threshold = 100
       migration_storage = described_class.new(migration_config)
 
       # New writes go to new store

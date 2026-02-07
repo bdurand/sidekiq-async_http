@@ -209,9 +209,6 @@ For large request/response payloads, you can configure external storage to keep 
 If you are using a job queue or background processing system, this allows you to handle large responses without hitting size limits or memory constraints on queue message payloads.
 
 ```ruby
-# Set the size threshold of 1K (default is 64K)
-config.payload_store_threshold = 1024
-
 # Register a payload store (see below for options; the file adapter should only be used for development/testing)
 config.register_payload_store(:my_store, adapter: :file, directory: "/tmp/payloads")
 
@@ -221,8 +218,8 @@ storage = AsyncHttpPool::ExternalStorage.new(config)
 large_response_data = storage.store(large_response.as_json)
 # Returns a reference like: {"$ref" => {"store" => "my_store", "key" => "abc123"}}
 
-small_response_data = storage.store(small_response.as_json)
-# Returns the original data hash if it's below the threshold
+small_response_data = storage.store(small_response.as_json, max_size: 1024)
+# Will not store the payload and returns the original data hash if the JSON payload is under 1KB.
 
 storage.storage_ref?(large_response_data) # => true
 storage.storage_ref?(small_response_data) # => false

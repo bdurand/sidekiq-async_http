@@ -218,7 +218,12 @@ module Sidekiq
         callback_args = CallbackValidator.validate_callback_args(callback_args)
         request_id = SecureRandom.uuid
 
-        data = external_storage.store(request.as_json)
+        data = if external_storage.enabled?
+          external_storage.store(request.as_json, max_size: configuration.payload_store_threshold)
+        else
+          request.as_json
+        end
+
         RequestWorker.perform_async(data, callback_name, raise_error_responses, callback_args, request_id)
 
         request_id
