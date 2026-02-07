@@ -63,7 +63,7 @@ jobs:
           -e MINIO_ROOT_USER=minioadmin \
           -e MINIO_ROOT_PASSWORD=minioadmin \
           minio/minio server /data --console-address ":9001"
-        timeout=5
+        timeout=10
         elapsed=0
         while [ $elapsed -lt $timeout ]; do
           if curl -sf http://localhost:9000/minio/health/live > /dev/null 2>&1; then
