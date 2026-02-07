@@ -48,14 +48,12 @@ RSpec.describe Sidekiq::AsyncHttp do
 
       config = described_class.configure do |c|
         c.max_connections = 512
-        c.idle_connection_timeout = 120
         c.request_timeout = 60
         c.shutdown_timeout = 30
         c.logger = custom_logger
       end
 
       expect(config.max_connections).to eq(512)
-      expect(config.idle_connection_timeout).to eq(120)
       expect(config.request_timeout).to eq(60)
       expect(config.shutdown_timeout).to eq(30)
       expect(config.logger).to eq(custom_logger)
@@ -139,7 +137,7 @@ RSpec.describe Sidekiq::AsyncHttp do
     end
 
     it "returns false when processor is stopped" do
-      described_class.instance_variable_set(:@processor, Sidekiq::AsyncHttp::Processor.new)
+      described_class.instance_variable_set(:@processor, Sidekiq::AsyncHttp::Processor.new(described_class.configuration))
 
       expect(described_class.running?).to be(false)
     end

@@ -31,6 +31,10 @@ ENV["REDIS_URL"] ||= "redis://127.0.0.1:24455/0"
 # Disable all real HTTP connections except localhost (for test server)
 WebMock.disable_net_connect!(allow_localhost: true)
 
+Dir.glob(File.join(__dir__, "support", "**", "*.rb")).sort.each do |file|
+  require file
+end
+
 # Use fake mode for Sidekiq during tests
 Sidekiq::Testing.fake!
 
@@ -38,10 +42,6 @@ Sidekiq.strict_args!(true)
 
 # Disable Sidekiq logging during tests
 Sidekiq.logger.level = Logger::ERROR
-
-Dir.glob(File.join(__dir__, "support", "**", "*.rb")).sort.each do |file|
-  require file
-end
 
 # Set up Sidekiq middlewares for tests
 Sidekiq::AsyncHttp.append_middleware
@@ -83,6 +83,23 @@ RSpec.configure do |config|
       sleep(0.5)
       retry
     end
+
+    S3Helper.setup
+    ActiveRecordHelper.setup
+    RedisHelper.setup
+  end
+
+  # Clear S3 bucket before each S3 test
+  config.before(:each, :s3) do
+    S3Helper.clear_bucket
+  end
+
+  config.before(:each, :active_record) do
+    ActiveRecordHelper.flushdb
+  end
+
+  config.before(:each, :redis) do
+    RedisHelper.flushdb
   end
 
   # Flush Redis database after each test

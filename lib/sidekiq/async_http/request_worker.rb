@@ -32,8 +32,8 @@ module Sidekiq
       # @return [void]
       def perform(data, callback_service_name, raise_error_responses, callback_args, request_id)
         # Fetch from external storage if needed
-        ref_data = ExternalStorage.storage_ref?(data) ? data : nil
-        actual_data = ref_data ? ExternalStorage.fetch(data) : data
+        ref_data = AsyncHttpPool::ExternalStorage.storage_ref?(data) ? data : nil
+        actual_data = ref_data ? Sidekiq::AsyncHttp.external_storage.fetch(data) : data
 
         request = Request.load(actual_data)
         sidekiq_job = Sidekiq::AsyncHttp::Context.current_job
@@ -48,7 +48,7 @@ module Sidekiq
             request_id: request_id
           )
         ensure
-          ExternalStorage.delete(ref_data) if ref_data
+          Sidekiq::AsyncHttp.external_storage.delete(ref_data) if ref_data
         end
       end
     end

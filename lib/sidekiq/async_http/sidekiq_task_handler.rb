@@ -8,7 +8,7 @@ module Sidekiq
     # - Completion and error callbacks are triggered via CallbackWorker
     # - Large payloads are stored via ExternalStorage before enqueuing
     # - Job retry uses Sidekiq::Client.push
-    class SidekiqTaskHandler < TaskHandler
+    class SidekiqTaskHandler < AsyncHttpPool::TaskHandler
       # @return [Hash] The Sidekiq job hash containing class, jid, args, etc.
       #   Exposed for TaskMonitor crash recovery serialization.
       attr_reader :sidekiq_job
@@ -27,7 +27,7 @@ module Sidekiq
       # @param callback [String] callback class name
       # @return [void]
       def on_complete(response, callback)
-        data = ExternalStorage.store(response.as_json)
+        data = store_if_needed(response.as_json)
         CallbackWorker.perform_async(data, "response", callback)
       end
 
@@ -40,7 +40,7 @@ module Sidekiq
       # @param callback [String] callback class name
       # @return [void]
       def on_error(error, callback)
-        data = ExternalStorage.store(error.as_json)
+        data = store_if_needed(error.as_json)
         CallbackWorker.perform_async(data, "error", callback)
       end
 
@@ -63,6 +63,17 @@ module Sidekiq
       # @return [Class] worker class
       def worker_class
         ClassHelper.resolve_class_name(@sidekiq_job["class"])
+      end
+
+      private
+
+      def store_if_needed(data)
+        external_storage = Sidekiq::AsyncHttp.external_storage
+        if external_storage.enabled?
+          external_storage.store(data, max_size: Sidekiq::AsyncHttp.configuration.payload_store_threshold)
+        else
+          data
+        end
       end
     end
   end

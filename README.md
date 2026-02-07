@@ -356,9 +356,6 @@ Sidekiq::AsyncHttp.configure do |config|
   # Responses larger than this will trigger ResponseTooLargeError
   config.max_response_size = 1024 * 1024
 
-  # Idle connection timeout in seconds (default: 60)
-  config.idle_connection_timeout = 60
-
   # Heartbeat interval for crash recovery in seconds (default: 60)
   config.heartbeat_interval = 60
 

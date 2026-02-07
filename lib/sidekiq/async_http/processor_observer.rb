@@ -4,15 +4,15 @@ module Sidekiq
   module AsyncHttp
     # Procesor Observer that collect stats in Redis for the WebUI and
     # monitors for crashed processes in order to re-enqueue workers.
-    class ProcessorObserver
+    class ProcessorObserver < AsyncHttpPool::ProcessorObserver
       attr_reader :task_monitor
 
       def initialize(processor)
         @processor = processor
-        @stats = Stats.new(@processor.config)
-        @task_monitor = TaskMonitor.new(@processor.config)
+        @stats = Stats.new(processor.config)
+        @task_monitor = TaskMonitor.new(processor.config)
         @monitor_thread = TaskMonitorThread.new(
-          @processor.config,
+          processor.config,
           @task_monitor,
           -> { @processor.inflight_request_ids }
         )

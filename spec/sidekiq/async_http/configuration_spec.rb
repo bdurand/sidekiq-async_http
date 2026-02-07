@@ -9,7 +9,6 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
         config = described_class.new
 
         expect(config.max_connections).to eq(256)
-        expect(config.idle_connection_timeout).to eq(60)
         expect(config.request_timeout).to eq(60)
         expect(config.shutdown_timeout).to eq(Sidekiq.default_configuration[:timeout] - 2)
         expect(config.logger).to eq(Sidekiq.logger)
@@ -27,7 +26,6 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
         custom_logger = Logger.new($stdout)
         config = described_class.new(
           max_connections: 512,
-          idle_connection_timeout: 120,
           request_timeout: 120,
           shutdown_timeout: 30,
           logger: custom_logger,
@@ -35,22 +33,10 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
         )
 
         expect(config.max_connections).to eq(512)
-        expect(config.idle_connection_timeout).to eq(120)
         expect(config.request_timeout).to eq(120)
         expect(config.shutdown_timeout).to eq(30)
         expect(config.logger).to eq(custom_logger)
         expect(config.raise_error_responses).to eq(true)
-      end
-    end
-
-    context "with partial custom values" do
-      it "merges with defaults" do
-        config = described_class.new(
-          max_connections: 1024
-        )
-
-        expect(config.max_connections).to eq(1024)
-        expect(config.idle_connection_timeout).to eq(60) # default
       end
     end
   end
@@ -79,22 +65,6 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
       end
     end
 
-    context "with invalid idle_connection_timeout" do
-      it "raises ArgumentError for zero" do
-        expect { described_class.new(idle_connection_timeout: 0) }.to raise_error(
-          ArgumentError,
-          "idle_connection_timeout must be a positive number, got: 0"
-        )
-      end
-
-      it "raises ArgumentError for negative" do
-        expect { described_class.new(idle_connection_timeout: -10) }.to raise_error(
-          ArgumentError,
-          "idle_connection_timeout must be a positive number, got: -10"
-        )
-      end
-    end
-
     context "with invalid request_timeout" do
       it "raises ArgumentError for zero" do
         expect { described_class.new(request_timeout: 0) }.to raise_error(
@@ -116,7 +86,6 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
     context "with float values" do
       it "accepts positive floats for timeouts" do
         described_class.new(
-          idle_connection_timeout: 30.5,
           request_timeout: 15.25,
           shutdown_timeout: 20.75
         )
@@ -310,9 +279,9 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
     end
 
     context "when logger is not configured" do
-      it "returns Sidekiq.logger if available" do
-        config = described_class.new(logger: nil)
+      it "defaults to Sidekiq.logger" do
         allow(Sidekiq).to receive(:logger).and_return(:sidekiq_logger)
+        config = described_class.new
 
         expect(config.logger).to eq(:sidekiq_logger)
       end
@@ -324,7 +293,6 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
       custom_logger = Logger.new($stdout)
       config = described_class.new(
         max_connections: 512,
-        idle_connection_timeout: 120,
         request_timeout: 60,
         shutdown_timeout: 30,
         logger: custom_logger,
@@ -338,7 +306,6 @@ RSpec.describe Sidekiq::AsyncHttp::Configuration do
 
       expect(hash).to be_a(Hash)
       expect(hash["max_connections"]).to eq(512)
-      expect(hash["idle_connection_timeout"]).to eq(120)
       expect(hash["request_timeout"]).to eq(60)
       expect(hash["shutdown_timeout"]).to eq(30)
       expect(hash["logger"]).to eq(custom_logger)
