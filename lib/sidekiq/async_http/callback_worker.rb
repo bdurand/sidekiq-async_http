@@ -51,8 +51,8 @@ module Sidekiq
         callback_service = callback_service_class.new
 
         # Fetch from external storage if needed
-        ref_data = ExternalStorage.storage_ref?(data) ? data : nil
-        actual_data = ref_data ? ExternalStorage.fetch(data) : data
+        ref_data = AsyncHttp.external_storage.storage_ref?(data) ? data : nil
+        actual_data = ref_data ? AsyncHttp.external_storage.fetch(data) : data
 
         begin
           if result_type == "response"
@@ -67,7 +67,7 @@ module Sidekiq
             raise ArgumentError, "Unknown result_type: #{result_type}"
           end
         ensure
-          ExternalStorage.delete(ref_data) if ref_data
+          AsyncHttp.external_storage.delete(ref_data) if ref_data
         end
       end
     end

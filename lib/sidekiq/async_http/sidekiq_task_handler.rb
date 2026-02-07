@@ -27,7 +27,7 @@ module Sidekiq
       # @param callback [String] callback class name
       # @return [void]
       def on_complete(response, callback)
-        data = ExternalStorage.store(response.as_json)
+        data = Sidekiq::AsyncHttp.external_storage.store(response.as_json)
         CallbackWorker.perform_async(data, "response", callback)
       end
 
@@ -40,7 +40,7 @@ module Sidekiq
       # @param callback [String] callback class name
       # @return [void]
       def on_error(error, callback)
-        data = ExternalStorage.store(error.as_json)
+        data = Sidekiq::AsyncHttp.external_storage.store(error.as_json)
         CallbackWorker.perform_async(data, "error", callback)
       end
 

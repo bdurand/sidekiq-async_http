@@ -8,7 +8,7 @@ module AsyncHttpPool
   # It has no dependencies on any job system.
   class Configuration
     # Default threshold in bytes above which payloads are stored externally
-    DEFAULT_PAYLOAD_STORE_THRESHOLD = 100_000
+    DEFAULT_PAYLOAD_STORE_THRESHOLD = 64 * 1024 # 64KB
 
     # @return [Integer] Maximum number of concurrent connections
     attr_reader :max_connections

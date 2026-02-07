@@ -101,7 +101,6 @@ module Sidekiq
     autoload :CallbackWorker, File.join(__dir__, "async_http/callback_worker")
     autoload :Configuration, File.join(__dir__, "async_http/configuration")
     autoload :Context, File.join(__dir__, "async_http/context")
-    autoload :ExternalStorage, File.join(__dir__, "async_http/external_storage")
     autoload :ProcessorObserver, File.join(__dir__, "async_http/processor_observer")
     autoload :RequestExecutor, File.join(__dir__, "async_http/request_executor")
     autoload :RequestWorker, File.join(__dir__, "async_http/request_worker")
@@ -116,6 +115,7 @@ module Sidekiq
     @configuration = nil
     @after_completion_callbacks = []
     @after_error_callbacks = []
+    @external_storage = nil
 
     class << self
       attr_writer :configuration
@@ -191,6 +191,14 @@ module Sidekiq
         @processor.nil? || @processor.stopped?
       end
 
+      # Get an ExternalStorage instance for storing and fetching payloads.
+      #
+      # @return [AsyncHttpPool::ExternalStorage]
+      # @api private
+      def external_storage
+        @external_storage ||= AsyncHttpPool::ExternalStorage.new(configuration)
+      end
+
       # Execute an async HTTP request.
       #
       # @param request [Request] the HTTP request to execute
@@ -210,7 +218,7 @@ module Sidekiq
         callback_args = CallbackValidator.validate_callback_args(callback_args)
         request_id = SecureRandom.uuid
 
-        data = ExternalStorage.store(request.as_json)
+        data = external_storage.store(request.as_json)
         RequestWorker.perform_async(data, callback_name, raise_error_responses, callback_args, request_id)
 
         request_id
@@ -328,6 +336,7 @@ module Sidekiq
         @processor&.stop(timeout: 0)
         @processor = nil
         @configuration = nil
+        @external_storage = nil
       end
 
       # Invoke the registered completion callbacks

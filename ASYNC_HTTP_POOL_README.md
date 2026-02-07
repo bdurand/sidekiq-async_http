@@ -204,11 +204,33 @@ Response bodies are automatically encoded for JSON serialization. Binary content
 
 ### Payload Stores
 
-For large request/response payloads, you can configure external storage to keep job arguments small. Payloads exceeding the configured threshold are automatically stored externally and fetched on demand.
+For large request/response payloads, you can configure external storage to keep serialized JSON payloads small. Payloads exceeding the configured threshold are automatically stored externally and fetched on demand.
+
+If you are using a job queue or background processing system, this allows you to handle large responses without hitting size limits or memory constraints on queue message payloads.
 
 ```ruby
-# Set the size threshold (default: 100KB)
-config.payload_store_threshold = 100_000
+# Set the size threshold of 1K (default is 64K)
+config.payload_store_threshold = 1024
+
+# Register a payload store (see below for options; the file adapter should only be used for development/testing)
+config.register_payload_store(:my_store, adapter: :file, directory: "/tmp/payloads")
+
+# Use the ExternalStorage class to set and fetch stored payloads in your callbacks.
+storage = AsyncHttpPool::ExternalStorage.new(config)
+
+large_response_data = storage.store(large_response.as_json)
+# Returns a reference like: {"$ref" => {"store" => "my_store", "key" => "abc123"}}
+
+small_response_data = storage.store(small_response.as_json)
+# Returns the original data hash if it's below the threshold
+
+storage.storage_ref?(large_response_data) # => true
+storage.storage_ref?(small_response_data) # => false
+
+storage.fetch(large_response_data) # Fetches the original data from the store
+storage.fetch(small_response_data) # Raises an error since this is not a reference
+
+storage.delete(large_response_data) # Deletes the stored payload
 ```
 
 #### File Store

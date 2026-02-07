@@ -8,7 +8,6 @@ require_relative "../lib/sidekiq-async_http"
 require_relative "app_config"
 
 Sidekiq::EncryptedArgs.configure!(secret: "A_VERY_SECRET_KEY_FOR_TESTING_PURPOSES_ONLY!")
-# Sidekiq::AsyncHttp.append_middleware
 
 # Configure Sidekiq to use Valkey from docker-compose
 Sidekiq.configure_server do |config|
@@ -24,6 +23,7 @@ Sidekiq::AsyncHttp.configure do |config|
   config.max_connections = AppConfig.max_connections
   config.proxy_url = ENV["HTTP_PROXY"]
   config.sidekiq_options = {encrypted_args: [:result, :request]}
+  config.register_payload_store(:redis, adapter: :redis, redis: Redis.new(url: AppConfig.redis_url), ttl: 600)
 end
 
 Sidekiq::AsyncHttp.after_completion do |response|
