@@ -71,10 +71,13 @@ module AsyncHttpPool
           upsert_options[:update_only] = [:data, :updated_at]
         end
 
-        @model.upsert(
-          {key: key, data: json, created_at: now, updated_at: now},
-          **upsert_options
-        )
+        @model.with_connection do
+          @model.upsert(
+            {key: key, data: json, created_at: now, updated_at: now},
+            **upsert_options
+          )
+        end
+
         key
       end
 

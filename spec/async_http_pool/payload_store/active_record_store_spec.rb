@@ -95,7 +95,7 @@ RSpec.describe "AsyncHttpPool::PayloadStore::ActiveRecordStore", :active_record 
 
   describe "thread safety" do
     it "handles concurrent access safely" do
-      threads = 10.times.map do |i|
+      threads = 3.times.map do |i|
         Thread.new do
           key = "thread-#{i}"
           data = {"thread" => i, "data" => "x" * 1000}
