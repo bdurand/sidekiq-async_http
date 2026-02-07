@@ -11,6 +11,7 @@ RSpec.describe AsyncHttpPool::PayloadStore::RedisStore do
 
   describe ".register" do
     it "is registered as :redis adapter" do
+      described_class
       expect(AsyncHttpPool::PayloadStore::Base.lookup(:redis)).to eq(described_class)
     end
   end

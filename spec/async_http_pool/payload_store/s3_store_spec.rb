@@ -14,6 +14,7 @@ RSpec.describe "AsyncHttpPool::PayloadStore::S3Store", :s3 do
 
   describe ".register" do
     it "is registered as :s3 adapter" do
+      described_class
       expect(AsyncHttpPool::PayloadStore::Base.lookup(:s3)).to eq(described_class)
     end
   end

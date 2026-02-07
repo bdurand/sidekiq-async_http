@@ -12,6 +12,7 @@ RSpec.describe "AsyncHttpPool::PayloadStore::ActiveRecordStore", :active_record 
 
   describe ".register" do
     it "is registered as :active_record adapter" do
+      described_class
       expect(AsyncHttpPool::PayloadStore::Base.lookup(:active_record)).to eq(described_class)
     end
   end
