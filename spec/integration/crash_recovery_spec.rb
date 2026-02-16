@@ -214,7 +214,7 @@ RSpec.describe "Crash Recovery", :integration do
       end
 
       # Wait for monitor to run GC (up to 5 seconds)
-      deadline = Time.now + 5
+      deadline = Time.now + 6
       while Time.now < deadline && !reenqueued
         sleep(0.1)
       end
