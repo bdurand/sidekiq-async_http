@@ -355,7 +355,7 @@ module Sidekiq
       # @return [void]
       def record_gc_run
         Sidekiq.redis do |redis|
-          redis.set(GC_LAST_RUN_KEY, (Time.now.to_f * 1000).to_i, ex: gc_last_run_ttl)
+          redis.set(GC_LAST_RUN_KEY, (Time.now.to_f * 1000).floor, ex: gc_last_run_ttl)
         end
       end
 
