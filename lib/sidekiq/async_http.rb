@@ -87,6 +87,7 @@ module Sidekiq
     @after_completion_callbacks = []
     @after_error_callbacks = []
     @external_storage = nil
+    @request_handler = nil
 
     class << self
       attr_writer :configuration
@@ -210,6 +211,7 @@ module Sidekiq
       # @param headers [Hash, AsyncHttpPool::HttpHeaders] request headers
       # @param body [String, nil] request body
       # @param json [Object, nil] JSON object to serialize as body
+      # @param params [Hash, nil] query parameters to append to URL
       # @param timeout [Float] request timeout in seconds
       # @param raise_error_responses [Boolean, nil] treat non-2xx responses as errors
       # @param callback_args [Hash, nil] arguments to pass to callback via response/error
@@ -221,11 +223,12 @@ module Sidekiq
         headers: {},
         body: nil,
         json: nil,
+        params: nil,
         timeout: nil,
         raise_error_responses: nil,
         callback_args: nil
       )
-        request = AsyncHttpPool::Request.new(method, url, body: body, json: json, headers: headers, timeout: timeout)
+        request = AsyncHttpPool::Request.new(method, url, body: body, json: json, headers: headers, params: params, timeout: timeout)
         execute(request, callback: callback, raise_error_responses: raise_error_responses, callback_args: callback_args)
       end
 
@@ -283,6 +286,17 @@ module Sidekiq
         @processor = AsyncHttpPool::Processor.new(configuration)
         @processor.observe(ProcessorObserver.new(@processor))
         @processor.start
+
+        @request_handler ||= lambda do |request_context|
+          execute(
+            request_context.request,
+            callback: request_context.callback,
+            raise_error_responses: request_context.raise_error_responses,
+            callback_args: request_context.callback_args
+          )
+        end
+
+        AsyncHttpPool::RequestHelper.register_handler(@request_handler)
       end
 
       # Signal the processor to drain (stop accepting new requests)
@@ -303,6 +317,11 @@ module Sidekiq
 
         timeout ||= configuration.shutdown_timeout
         @processor.stop(timeout: timeout)
+
+        if @request_handler
+          AsyncHttpPool::RequestHelper.unregister_handler(@request_handler)
+        end
+
         @processor = nil
       end
 

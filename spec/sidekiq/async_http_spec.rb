@@ -654,6 +654,19 @@ RSpec.describe Sidekiq::AsyncHttp do
         request_data, _, _, _, _ = job["args"]
         expect(request_data).to eq(request.as_json)
       end
+
+      it "passes through params to the request" do
+        described_class.request(
+          :get,
+          "https://api.example.com/data",
+          callback: TestCallback,
+          params: {page: 2, per_page: 50}
+        )
+
+        job = Sidekiq::AsyncHttp::RequestWorker.jobs.last
+        request_data, _, _, _, _ = job["args"]
+        expect(request_data["url"]).to eq("https://api.example.com/data?page=2&per_page=50")
+      end
     end
 
     describe ".get" do
