@@ -35,6 +35,9 @@ Registers Sidekiq server lifecycle hooks to automatically:
 - Drain the processor when Sidekiq receives TSTP signal (`:quiet` event)
 - Stop the processor gracefully when Sidekiq shuts down (`:shutdown` event)
 
+### RequestHelper Handler Registration
+On startup, the integration automatically registers a handler with `AsyncHttpPool::RequestHelper` so that classes including the `RequestHelper` module can use `async_get`, `async_post`, etc. The handler translates those calls into `Sidekiq::AsyncHttp.execute` invocations. The handler is unregistered on shutdown.
+
 ### ProcessorObserver
 Observes processor state changes and updates the TaskMonitor's Redis heartbeats, enabling distributed crash recovery.
 
@@ -296,6 +299,7 @@ Each Sidekiq process runs:
 
 **Application Layer:**
 - User code calls `Sidekiq::AsyncHttp.get/post/etc`
+- Or includes `AsyncHttpPool::RequestHelper` for `async_get/async_post/etc` instance methods
 - Callback services implement `on_complete` and `on_error`
 
 **Sidekiq Integration Layer (this gem):**

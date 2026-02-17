@@ -3,6 +3,10 @@
 class RunJobsAction
   include AsyncHttpPool::RequestHelper
 
+  BASE_URL = "http://localhost:#{ENV.fetch("PORT", "9292")}"
+
+  request_template base_url: BASE_URL
+
   def call(env)
     request = Rack::Request.new(env)
     return method_not_allowed_response unless request.post?
@@ -20,10 +24,6 @@ class RunJobsAction
       StatusReport.new("Synchronous").reset!
     end
 
-    # Build the base test URL for this application
-    port = ENV.fetch("PORT", "9292")
-    base_url = "http://localhost:#{port}/slow"
-
     drifted_delay = lambda do
       actual_delay = delay
       if delay > 0 && delay_drift > 0
@@ -37,11 +37,11 @@ class RunJobsAction
 
     jobs = []
     async_count.times do
-      jobs << lambda { async_get("#{base_url}?delay=#{drifted_delay.call}", callback: StatusReport::Callback, timeout: timeout) }
+      jobs << lambda { async_get("/slow", params: {delay: drifted_delay.call}, callback: StatusReport::Callback, timeout: timeout) }
     end
 
     sync_count.times do
-      jobs << lambda { SynchronousWorker.perform_async("GET", "#{base_url}?delay=#{drifted_delay.call}", timeout) }
+      jobs << lambda { SynchronousWorker.perform_async("GET", "#{BASE_URL}/slow?delay=#{drifted_delay.call}", timeout) }
     end
     jobs.shuffle.each(&:call)
 

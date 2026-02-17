@@ -254,6 +254,41 @@ class ApiService
 end
 ```
 
+### Using the RequestHelper Module
+
+For classes that make many async HTTP requests, you can include `AsyncHttpPool::RequestHelper` to get convenient instance methods like `async_get`, `async_post`, `async_put`, `async_patch`, and `async_delete`. You can also define a request template at the class level using the `request_template` class method to set shared options like `base_url`, `headers`, and `timeout`.
+
+When using this gem, the request handler is automatically registered when the processor starts and unregistered when it stops — no manual setup is required.
+
+```ruby
+class NotificationService
+  include AsyncHttpPool::RequestHelper
+
+  request_template base_url: "https://api.example.com",
+                   headers: {"Authorization" => "Bearer #{ENV['API_KEY']}"},
+                   timeout: 30
+
+  def notify_user(user_id, message)
+    async_post("/notifications",
+      json: {user_id: user_id, message: message},
+      callback: NotificationCallback,
+      callback_args: {user_id: user_id}
+    )
+  end
+
+  def fetch_user(user_id)
+    async_get("/users/#{user_id}",
+      callback: FetchUserCallback,
+      callback_args: {user_id: user_id}
+    )
+  end
+end
+```
+
+The `async_*` methods accept the same options as `Sidekiq::AsyncHttp.get`, `Sidekiq::AsyncHttp.post`, etc. Paths are resolved relative to the `base_url` defined in the request template.
+
+See the [async_http_pool gem](https://github.com/bdurand/async_http_pool) for the full `RequestHelper` documentation.
+
 ### Callback Arguments
 
 Pass custom data to your callbacks using the `callback_args` option:
