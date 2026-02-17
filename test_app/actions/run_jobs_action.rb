@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class RunJobsAction
+  include AsyncHttpPool::RequestHelper
+
   def call(env)
     request = Rack::Request.new(env)
     return method_not_allowed_response unless request.post?
@@ -35,8 +37,9 @@ class RunJobsAction
 
     jobs = []
     async_count.times do
-      jobs << lambda { Sidekiq::AsyncHttp.get("#{base_url}?delay=#{drifted_delay.call}", callback: StatusReport::Callback, timeout: timeout) }
+      jobs << lambda { async_get("#{base_url}?delay=#{drifted_delay.call}", callback: StatusReport::Callback, timeout: timeout) }
     end
+
     sync_count.times do
       jobs << lambda { SynchronousWorker.perform_async("GET", "#{base_url}?delay=#{drifted_delay.call}", timeout) }
     end
